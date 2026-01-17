@@ -60,6 +60,12 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun restoreContact(name: String, phone: String) {
+        viewModelScope.launch {
+            contactDao.insert(Contact(name = name, phone = phone, deletionTimestamp = null))
+        }
+    }
+
     private fun scheduleDeletion(contact: Contact) {
         val intent = Intent(getApplication(), DeleteContactReceiver::class.java).apply {
             putExtra("contact_id", contact.id)
@@ -81,7 +87,10 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
 
     private fun cancelDeletion(contact: Contact) {
         val intent = Intent(getApplication(), DeleteContactReceiver::class.java).apply {
-            putExtra("contact_id", contact.id)
+            putExtra(
+                "contact_id",
+                contact.id
+            )
         }
         val pendingIntent = PendingIntent.getBroadcast(
             getApplication(),

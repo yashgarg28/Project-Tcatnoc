@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.tempcontacts.ui.theme.TempContactsTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsDataStore = SettingsDataStore(this)
+        val deletionStore = DeletionStore.getInstance(this)
         askForPermissions()
 
         setContent {
@@ -76,7 +80,38 @@ class MainActivity : ComponentActivity() {
             }
 
             TempContactsTheme(darkTheme = useDarkTheme) {
-                AppNavigation(viewModel = viewModel, settingsDataStore = settingsDataStore)
+                val snackbarHostState = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
+
+                LaunchedEffect(Unit) {
+                    deletionStore.deletedContactFlow.collectLatest {
+                        it?.let {
+                            scope.launch {
+                                val job = launch {
+                                    try {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "${it.first} deleted",
+                                            actionLabel = "Restore",
+                                            withDismissAction = true,
+                                            duration = SnackbarDuration.Indefinite
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            viewModel.restoreContact(it.first, it.second)
+                                        }
+                                    } finally {
+                                        deletionStore.clearDeletedContact(it.first, it.second)
+                                    }
+                                }
+                                delay(10000)
+                                job.cancel()
+                            }
+                        }
+                    }
+                }
+
+                Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { 
+                    AppNavigation(viewModel = viewModel, settingsDataStore = settingsDataStore)
+                }
             }
         }
     }

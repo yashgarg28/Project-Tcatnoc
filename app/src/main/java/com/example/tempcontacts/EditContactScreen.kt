@@ -146,7 +146,7 @@ fun EditContactScreen(
                 FilterChip(selected = selectedChip == "no_time", onClick = { 
                     selectedChip = "no_time"
                     selectedDurationMillis = null
-                 }, label = { Text("No Time") })
+                 }, label = { Text("Don't delete") })
                 FilterChip(selected = selectedChip == "24h", onClick = { 
                     selectedChip = "24h"
                     selectedDurationMillis = TimeUnit.HOURS.toMillis(24)
