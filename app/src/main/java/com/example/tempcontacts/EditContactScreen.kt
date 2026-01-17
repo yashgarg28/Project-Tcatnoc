@@ -42,7 +42,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,9 +130,7 @@ fun EditContactScreen(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { newValue ->
-                        if (newValue.length <= country.phoneLength) {
-                            phone = newValue.filter { it.isDigit() }
-                        }
+                        phone = newValue.filter { it.isDigit() }
                     },
                     label = { Text("Phone") },
                     isError = !isPhoneNumberValid,
@@ -149,7 +146,7 @@ fun EditContactScreen(
                 FilterChip(selected = selectedChip == "no_time", onClick = { 
                     selectedChip = "no_time"
                     selectedDurationMillis = null
-                 }, label = { Text("Don't Delete") })
+                 }, label = { Text("No Time") })
                 FilterChip(selected = selectedChip == "24h", onClick = { 
                     selectedChip = "24h"
                     selectedDurationMillis = TimeUnit.HOURS.toMillis(24)
@@ -224,7 +221,7 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
             Text(text = "Days: ${days.toInt()}")
             Slider(
                 value = days,
-                onValueChange = { days = it.roundToInt().toFloat() },
+                onValueChange = { days = it },
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                 valueRange = 0f..30f, 
                 steps = 29
@@ -236,7 +233,7 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
             Text(text = "Hours: ${hours.toInt()}")
             Slider(
                 value = hours, 
-                onValueChange = { hours = it.roundToInt().toFloat() }, 
+                onValueChange = { hours = it }, 
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                 valueRange = 0f..23f, 
                 steps = 22
@@ -248,7 +245,7 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
             Text(text = "Minutes: ${minutes.toInt()}")
             Slider(
                 value = minutes, 
-                onValueChange = { minutes = it.roundToInt().toFloat() }, 
+                onValueChange = { minutes = it }, 
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                 valueRange = 0f..59f, 
                 steps = 58
