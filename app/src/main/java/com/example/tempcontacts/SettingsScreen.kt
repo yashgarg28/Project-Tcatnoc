@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -235,6 +236,8 @@ fun SettingsScreen(
                     }
                 }
             }
+            Spacer(Modifier.weight(1f))
+            AppVersionInfo()
         }
     }
 
@@ -290,5 +293,25 @@ private fun ThemeCard(
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = label, style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+@Composable
+fun AppVersionInfo() {
+    val context = LocalContext.current
+    val version = try {
+        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        "Version ${pInfo.versionName}"
+    } catch (e: Exception) {
+        "Version N/A"
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = version,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.Center)
+        )
     }
 }
