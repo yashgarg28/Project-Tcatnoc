@@ -1,3 +1,4 @@
 1.2 - added version in settings
 1.3 - added versions.txt file and user able to paste contact
 1.3.2 and 5 - changed no time to don't delete and restored notifications
+2 and 6- Changed the name to BrnBook

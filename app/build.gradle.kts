@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.tempcontacts"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.2"
+        versionCode = 6
+        versionName = "2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
