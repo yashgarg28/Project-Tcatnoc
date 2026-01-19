@@ -27,7 +27,7 @@ class DeleteContactReceiver : BroadcastReceiver() {
                         contactDao.delete(contact)
                         showDeleteNotification(context, contact)
 
-                        // Save to DeletionStore
+                        // Save to DeletionStore to trigger in-app popup
                         val deletionStore = DeletionStore.getInstance(context)
                         deletionStore.saveDeletedContact(contact.name, contact.phone)
                     }
@@ -61,7 +61,7 @@ class DeleteContactReceiver : BroadcastReceiver() {
         val restorePendingIntent = PendingIntent.getBroadcast(context, contact.id, restoreIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Contact Deleted")
             .setContentText("${contact.name} has been automatically deleted.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

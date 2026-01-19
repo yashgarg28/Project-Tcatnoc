@@ -220,7 +220,7 @@ fun SettingsScreen(
                             val intent = Intent(Intent.ACTION_SENDTO).apply {
                                 data = Uri.parse("mailto:")
                                 putExtra(Intent.EXTRA_EMAIL, arrayOf("yashgarg2801@outlook.com"))
-                                putExtra(Intent.EXTRA_SUBJECT, "Bug Report for Temp Contacts")
+                                putExtra(Intent.EXTRA_SUBJECT, "Bug Report for BrnBook")
                                 putExtra(Intent.EXTRA_TEXT, "Please describe the bug:\n\n\n---\n$deviceInfo")
                             }
                             try {
@@ -237,7 +237,21 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
-            AppVersionInfo()
+            val version = try {
+                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                "Version ${pInfo.versionName}"
+            } catch (e: Exception) {
+                "Version N/A"
+            }
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = version,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
         }
     }
 
@@ -293,25 +307,5 @@ private fun ThemeCard(
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = label, style = MaterialTheme.typography.labelLarge)
         }
-    }
-}
-
-@Composable
-fun AppVersionInfo() {
-    val context = LocalContext.current
-    val version = try {
-        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        "Version ${pInfo.versionName}"
-    } catch (e: Exception) {
-        "Version N/A"
-    }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = version,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.Center)
-        )
     }
 }
