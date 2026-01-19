@@ -14,16 +14,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,12 +36,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.tempcontacts.ui.theme.TempContactsTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
 
     private val viewModel: ContactViewModel by viewModels()
@@ -59,17 +54,15 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission is granted. You can now post notifications.
+            // Permission is granted.
         } else {
-            // Explain to the user that the feature is unavailable because the
-            // feature requires a permission that the user has denied.
+            // Handle permission denial.
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsDataStore = SettingsDataStore(this)
-        val deletionStore = DeletionStore.getInstance(this)
         createNotificationChannels()
         askForPermissions()
 
@@ -80,39 +73,61 @@ class MainActivity : ComponentActivity() {
                 "Dark" -> true
                 else -> isSystemInDarkTheme()
             }
+            
+            val hasSeenOnboarding by settingsDataStore.hasSeenOnboardingFlow.collectAsState(initial = null)
 
             TempContactsTheme(darkTheme = useDarkTheme) {
-                val snackbarHostState = remember { SnackbarHostState() }
-                val scope = rememberCoroutineScope()
+                if (hasSeenOnboarding != null) {
+                    val navController = rememberNavController()
+                    val startDestination = if (hasSeenOnboarding == true) "contactList" else "onboarding"
 
-                LaunchedEffect(Unit) {
-                    deletionStore.deletedContactFlow.collectLatest {
-                        it?.let {
-                            scope.launch {
-                                val job = launch {
-                                    try {
-                                        val result = snackbarHostState.showSnackbar(
-                                            message = "${it.first} deleted",
-                                            actionLabel = "Restore",
-                                            withDismissAction = true,
-                                            duration = SnackbarDuration.Indefinite
-                                        )
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            viewModel.restoreContact(it.first, it.second)
-                                        }
-                                    } finally {
-                                        deletionStore.clearDeletedContact(it.first, it.second)
-                                    }
-                                }
-                                delay(10000) // Auto-dismiss after 10 seconds
-                                job.cancel()
-                            }
+                    NavHost(navController = navController, startDestination = startDestination) {
+                        composable("onboarding") {
+                            val onboardingViewModel: OnboardingViewModel = viewModel(factory = OnboardingViewModelFactory(settingsDataStore))
+                            OnboardingScreen(onOnboardingComplete = { 
+                                onboardingViewModel.saveOnboardingSeen()
+                                navController.navigate("contactList") { popUpTo("onboarding") { inclusive = true } }
+                            })
+                        }
+                        composable("contactList") {
+                            ContactListScreen(
+                                viewModel = viewModel, 
+                                onContactClick = { contactId -> navController.navigate("contactDetail/$contactId") },
+                                onSettingsClick = { navController.navigate("settings") }
+                            )
+                        }
+                        composable(
+                            "contactDetail/{contactId}",
+                            arguments = listOf(navArgument("contactId") { defaultValue = 0 })
+                        ) { backStackEntry ->
+                            val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                            ContactDetailScreen(
+                                viewModel = viewModel,
+                                contactId = contactId,
+                                onBackClick = { navController.popBackStack() },
+                                onEditClick = { navController.navigate("editContact/$contactId") }
+                            )
+                        }
+                        composable(
+                            "editContact/{contactId}",
+                            arguments = listOf(navArgument("contactId") { defaultValue = 0 })
+                        ) { backStackEntry ->
+                            val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                            EditContactScreen(
+                                viewModel = viewModel,
+                                contactId = contactId,
+                                onContactUpdated = { navController.popBackStack() },
+                                onBackClick = { navController.popBackStack() }
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                settingsDataStore = settingsDataStore,
+                                onBackClick = { navController.popBackStack() }
+                            )
                         }
                     }
-                }
-
-                Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) {
-                    AppNavigation(viewModel = viewModel, settingsDataStore = settingsDataStore)
                 }
             }
         }

@@ -53,3 +53,6 @@ val md_theme_dark_onSurface = Color(0xFFE6E1E5)
 val md_theme_dark_surfaceVariant = Color(0xFF1F2022)
 val md_theme_dark_onSurfaceVariant = Color(0xFFFFFFFF)
 val md_theme_dark_outline = Color(0xFF938F99)
+
+// Custom Colors
+val BurnerOrange = Color(0xFFFF4500)

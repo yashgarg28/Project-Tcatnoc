@@ -1,56 +1,58 @@
 package com.example.tempcontacts
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavType
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
 @Composable
-fun AppNavigation(viewModel: ContactViewModel, settingsDataStore: SettingsDataStore) {
+fun AppNavigation(
+    viewModel: ContactViewModel,
+    settingsDataStore: SettingsDataStore,
+    startDestination: String
+) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "contact_list") {
-        composable("contact_list") {
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable("onboarding") {
+            val onboardingViewModel: OnboardingViewModel = viewModel(factory = OnboardingViewModelFactory(settingsDataStore))
+            OnboardingScreen(onOnboardingComplete = { 
+                onboardingViewModel.saveOnboardingSeen()
+                navController.navigate("contactList") { popUpTo("onboarding") { inclusive = true } }
+            })
+        }
+        composable("contactList") {
             ContactListScreen(
                 viewModel = viewModel, 
-                onContactClick = { contactId ->
-                    if (contactId == 0) {
-                        navController.navigate("edit_contact/0")
-                    } else {
-                        navController.navigate("contact_detail/$contactId")
-                    }
-                },
+                onContactClick = { contactId -> navController.navigate("contactDetail/$contactId") },
                 onSettingsClick = { navController.navigate("settings") }
             )
         }
         composable(
-            route = "contact_detail/{contactId}",
-            arguments = listOf(navArgument("contactId") { type = NavType.IntType })
+            "contactDetail/{contactId}",
+            arguments = listOf(navArgument("contactId") { defaultValue = 0 })
         ) { backStackEntry ->
-            val contactId = backStackEntry.arguments?.getInt("contactId")
-            contactId?.let {
-                ContactDetailScreen(
-                    viewModel = viewModel,
-                    contactId = it,
-                    onEditClick = { navController.navigate("edit_contact/$it") },
-                    onBackClick = { navController.popBackStack() }
-                )
-            }
+            val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+            ContactDetailScreen(
+                viewModel = viewModel,
+                contactId = contactId,
+                onBackClick = { navController.popBackStack() },
+                onEditClick = { navController.navigate("editContact/$contactId") }
+            )
         }
         composable(
-            route = "edit_contact/{contactId}",
-            arguments = listOf(navArgument("contactId") { type = NavType.IntType })
+            "editContact/{contactId}",
+            arguments = listOf(navArgument("contactId") { defaultValue = 0 })
         ) { backStackEntry ->
-            val contactId = backStackEntry.arguments?.getInt("contactId")
-            contactId?.let {
-                EditContactScreen(
-                    viewModel = viewModel,
-                    contactId = it,
-                    onContactUpdated = { navController.popBackStack() },
-                    onBackClick = { navController.popBackStack() }
-                )
-            }
+            val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+            EditContactScreen(
+                viewModel = viewModel,
+                contactId = contactId,
+                onContactUpdated = { navController.popBackStack() },
+                onBackClick = { navController.popBackStack() }
+            )
         }
         composable("settings") {
             SettingsScreen(
