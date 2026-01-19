@@ -1,12 +1,10 @@
 package com.example.tempcontacts
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,19 +37,7 @@ class DeleteContactReceiver : BroadcastReceiver() {
     }
 
     private fun showDeleteNotification(context: Context, contact: Contact) {
-        val channelId = "contact_deletion_channel"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Contact Deletion",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notifies when a contact is automatically deleted."
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
 
         val restoreIntent = Intent(context, RestoreContactReceiver::class.java).apply {
             putExtra("contact_id", contact.id)
@@ -60,7 +46,7 @@ class DeleteContactReceiver : BroadcastReceiver() {
         }
         val restorePendingIntent = PendingIntent.getBroadcast(context, contact.id, restoreIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        val notification = NotificationCompat.Builder(context, "contact_deletion_channel")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Contact Deleted")
             .setContentText("${contact.name} has been automatically deleted.")

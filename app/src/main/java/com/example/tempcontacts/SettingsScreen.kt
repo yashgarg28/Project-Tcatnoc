@@ -1,5 +1,6 @@
 package com.example.tempcontacts
 
+import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -45,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,6 +110,28 @@ fun SettingsScreen(
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to import contacts", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+    
+    val roleManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+    } else {
+        null
+    }
+
+    var isCallerIdEnabled by remember { mutableStateOf(false) }
+
+    val requestRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
+            isCallerIdEnabled = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+        }
+    }
+    
+    LaunchedEffect(roleManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
+            isCallerIdEnabled = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
         }
     }
 
@@ -199,6 +223,24 @@ fun SettingsScreen(
                     }
                 }
             }
+            
+            if (roleManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Caller ID", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(if (isCallerIdEnabled) "Enabled" else "Disabled")
+                            Button(onClick = {
+                                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                                requestRoleLauncher.launch(intent)
+                            }) {
+                                Text(if (isCallerIdEnabled) "Change Default" else "Set as Default")
+                            }
+                        }
+                    }
+                }
+            }
 
             Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -237,21 +279,7 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
-            val version = try {
-                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                "Version ${pInfo.versionName}"
-            } catch (e: Exception) {
-                "Version N/A"
-            }
-
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = version,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
+            AppVersionInfo()
         }
     }
 
@@ -281,7 +309,6 @@ fun SettingsScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ThemeCard(
     modifier: Modifier = Modifier,
@@ -307,5 +334,25 @@ private fun ThemeCard(
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = label, style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+@Composable
+fun AppVersionInfo() {
+    val context = LocalContext.current
+    val version = try {
+        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        "Version ${pInfo.versionName}"
+    } catch (e: Exception) {
+        "Version N/A"
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = version,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.Center)
+        )
     }
 }

@@ -1,6 +1,8 @@
 package com.example.tempcontacts
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -16,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         settingsDataStore = SettingsDataStore(this)
         val deletionStore = DeletionStore.getInstance(this)
+        createNotificationChannels()
         askForPermissions()
 
         setContent {
@@ -102,14 +104,14 @@ class MainActivity : ComponentActivity() {
                                         deletionStore.clearDeletedContact(it.first, it.second)
                                     }
                                 }
-                                delay(10000)
+                                delay(10000) // Auto-dismiss after 10 seconds
                                 job.cancel()
                             }
                         }
                     }
                 }
 
-                Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { 
+                Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) {
                     AppNavigation(viewModel = viewModel, settingsDataStore = settingsDataStore)
                 }
             }
@@ -122,6 +124,31 @@ class MainActivity : ComponentActivity() {
                 PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val deletionChannel = NotificationChannel(
+                "contact_deletion_channel",
+                "Contact Deletion",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifies when a contact is deleted."
+            }
+
+            val callerIdChannel = NotificationChannel(
+                "brnbook_caller_id_channel",
+                "BrnBook Caller ID",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Displays an overlay for incoming calls from temporary contacts."
+            }
+
+            val notificationManager: NotificationManager =
+                getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(deletionChannel)
+            notificationManager.createNotificationChannel(callerIdChannel)
         }
     }
 }
