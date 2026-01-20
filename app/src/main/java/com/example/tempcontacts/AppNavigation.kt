@@ -26,7 +26,13 @@ fun AppNavigation(
         composable("contactList") {
             ContactListScreen(
                 viewModel = viewModel, 
-                onContactClick = { contactId -> navController.navigate("contactDetail/$contactId") },
+                onContactClick = { contactId ->
+                    if (contactId == 0) {
+                        navController.navigate("editContact/0")
+                    } else {
+                        navController.navigate("contactDetail/$contactId")
+                    }
+                },
                 onSettingsClick = { navController.navigate("settings") }
             )
         }
@@ -58,8 +64,18 @@ fun AppNavigation(
             SettingsScreen(
                 viewModel = viewModel,
                 settingsDataStore = settingsDataStore,
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onAboutClick = { navController.navigate("about_screen") }
             )
+        }
+        composable("about_screen") {
+            AboutScreen(
+                onBackClick = { navController.popBackStack() },
+                onPrivacyPolicyClick = { navController.navigate("privacy_policy_screen") }
+            )
+        }
+        composable("privacy_policy_screen") {
+            PrivacyPolicyScreen(onBackClick = { navController.popBackStack() })
         }
     }
 }

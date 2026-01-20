@@ -6,3 +6,4 @@
 2.2 and 8 - Changed name to burn book, called id notification and basic onboarding flow
 2.2.1 and 9 - add contact bug
 2.2.2 and 10 - fixed some ui bugs
+2.3.1 and 11 - added the entire about page
