@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -92,7 +93,13 @@ class MainActivity : ComponentActivity() {
                         composable("contactList") {
                             ContactListScreen(
                                 viewModel = viewModel, 
-                                onContactClick = { contactId -> navController.navigate("contactDetail/$contactId") },
+                                onContactClick = { contactId ->
+                                    if (contactId == 0) {
+                                        navController.navigate("editContact/0")
+                                    } else {
+                                        navController.navigate("contactDetail/$contactId")
+                                    }
+                                },
                                 onSettingsClick = { navController.navigate("settings") }
                             )
                         }
@@ -127,6 +134,10 @@ class MainActivity : ComponentActivity() {
                                 onBackClick = { navController.popBackStack() }
                             )
                         }
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
                 }
             }
@@ -244,10 +255,8 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding)) {
-            item { Spacer(modifier = Modifier.height(8.dp)) } 
-
-            filteredContacts.forEach { (letter, contacts) ->
-                stickyHeader {
+            items(groupedContacts.entries.toList()) { (letter, contacts) ->
+                Column {
                     Text(
                         text = letter.toString(),
                         modifier = Modifier
@@ -256,8 +265,6 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                }
-                item {
                     Card(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),

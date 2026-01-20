@@ -4,3 +4,4 @@
 2 and 6- Changed the name to BrnBook
 2.1.1 and 7 - restored the popup notifications
 2.2 and 8 - Changed name to burn book, called id notification and basic onboarding flow
+2.2.1 and 9 - add contact bug
