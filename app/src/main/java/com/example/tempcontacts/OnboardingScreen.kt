@@ -22,8 +22,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -31,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.tempcontacts.ui.theme.BurnerOrange
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -69,58 +66,63 @@ fun OnboardingScreen(onOnboardingComplete: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(imageVector = pages[page].icon, contentDescription = null, modifier = Modifier.size(128.dp), tint = BurnerOrange)
+                Icon(imageVector = pages[page].icon, contentDescription = null, modifier = Modifier.size(128.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.height(32.dp))
-                Text(text = pages[page].title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center)
+                Text(text = pages[page].title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = pages[page].description, textAlign = TextAlign.Center, color = Color.Gray)
+                Text(text = pages[page].description, textAlign = TextAlign.Center, color = Color.White)
             }
         }
 
         // Top-right Skip button
         TextButton(
             onClick = onOnboardingComplete,
-            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(16.dp)
         ) {
-            Text("Skip", color = BurnerOrange)
+            Text("Skip", color = MaterialTheme.colorScheme.primary)
         }
 
         // Bottom controls
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(32.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Dot Indicator
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pages.indices.forEach { index ->
-                    val width = animateDpAsState(targetValue = if (pagerState.currentPage == index) 24.dp else 8.dp, label = "").value
-                    Box(
-                        modifier = Modifier
-                            .height(8.dp)
-                            .width(width)
-                            .clip(CircleShape)
-                            .background(if (pagerState.currentPage == index) BurnerOrange else Color.Gray)
-                    )
+        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Dot Indicator
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pages.indices.forEach { index ->
+                        val width = animateDpAsState(targetValue = if (pagerState.currentPage == index) 24.dp else 8.dp, label = "").value
+                        Box(
+                            modifier = Modifier
+                                .height(8.dp)
+                                .width(width)
+                                .clip(CircleShape)
+                                .background(if (pagerState.currentPage == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+
+                // Next/Get Started Button
+                Button(
+                    onClick = {
+                        if (pagerState.currentPage < pages.size - 1) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        } else {
+                            onOnboardingComplete()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
+                ) {
+                    Text(if (pagerState.currentPage < pages.size - 1) "Next" else "Get Started")
                 }
             }
-
-            // Next/Get Started Button
-            Button(
-                onClick = {
-                    if (pagerState.currentPage < pages.size - 1) {
-                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                    } else {
-                        onOnboardingComplete()
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = BurnerOrange)
-            ) {
-                Text(if (pagerState.currentPage < pages.size - 1) "Next" else "Get Started")
-            }
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }

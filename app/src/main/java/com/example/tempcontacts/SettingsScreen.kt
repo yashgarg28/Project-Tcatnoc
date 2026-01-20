@@ -1,6 +1,5 @@
 package com.example.tempcontacts
 
-import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -16,12 +15,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.BugReport
@@ -112,26 +114,30 @@ fun SettingsScreen(
             }
         }
     }
-    
+
     val roleManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+        context.getSystemService(Context.ROLE_SERVICE) as android.app.role.RoleManager
     } else {
         null
     }
 
     var isCallerIdEnabled by remember { mutableStateOf(false) }
+    var isRoleAvailable by remember { mutableStateOf(false) }
 
     val requestRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
-            isCallerIdEnabled = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+            isCallerIdEnabled = roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING)
         }
     }
-    
+
     LaunchedEffect(roleManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
-            isCallerIdEnabled = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+            isRoleAvailable = roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_CALL_SCREENING)
+            if (isRoleAvailable) {
+                isCallerIdEnabled = roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING)
+            }
         }
     }
 
@@ -147,138 +153,144 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Theme", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        ThemeCard(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Outlined.LightMode,
-                            label = "Light",
-                            isSelected = theme == "Light",
-                            onClick = { scope.launch { settingsDataStore.saveTheme("Light") } }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ThemeCard(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Outlined.DarkMode,
-                            label = "Dark",
-                            isSelected = theme == "Dark",
-                            onClick = { scope.launch { settingsDataStore.saveTheme("Dark") } }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ThemeCard(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Outlined.SettingsBrightness,
-                            label = "System",
-                            isSelected = theme == "System",
-                            onClick = { scope.launch { settingsDataStore.saveTheme("System") } }
-                        )
-                    }
-                }
-            }
-
-            Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) {
-                    Text("Data", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Start))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Export or import your contacts as a .json file.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp).align(Alignment.CenterHorizontally)
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Button(onClick = { exportLauncher.launch("contacts.json") }) {
-                            Icon(Icons.Outlined.FileUpload, contentDescription = "Export", modifier = Modifier.padding(end = 8.dp))
-                            Text("Export")
-                        }
-                        Button(onClick = { importLauncher.launch("application/json") }) {
-                            Icon(Icons.Outlined.FileDownload, contentDescription = "Import", modifier = Modifier.padding(end = 8.dp))
-                            Text("Import")
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                    TextButton(
-                        onClick = { showDeleteAllDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                         Icon(Icons.Outlined.Delete, contentDescription = "Delete All", tint = MaterialTheme.colorScheme.error, modifier = Modifier.padding(end = 8.dp))
-                         Text("Delete All Contacts", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-            
-            if (roleManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(16.dp)) // Add space at the top
                 Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Caller ID", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text("Theme", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(if (isCallerIdEnabled) "Enabled" else "Disabled")
-                            Button(onClick = {
-                                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                                requestRoleLauncher.launch(intent)
-                            }) {
-                                Text(if (isCallerIdEnabled) "Change Default" else "Set as Default")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            ThemeCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Outlined.LightMode,
+                                label = "Light",
+                                isSelected = theme == "Light",
+                                onClick = { scope.launch { settingsDataStore.saveTheme("Light") } }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            ThemeCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Outlined.DarkMode,
+                                label = "Dark",
+                                isSelected = theme == "Dark",
+                                onClick = { scope.launch { settingsDataStore.saveTheme("Dark") } }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            ThemeCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Outlined.SettingsBrightness,
+                                label = "System",
+                                isSelected = theme == "System",
+                                onClick = { scope.launch { settingsDataStore.saveTheme("System") } }
+                            )
+                        }
+                    }
+                }
+
+                Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    ) {
+                        Text("Data", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Start))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Export or import your contacts as a .json file.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 16.dp).align(Alignment.CenterHorizontally)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Button(onClick = { exportLauncher.launch("contacts.json") }) {
+                                Icon(Icons.Outlined.FileUpload, contentDescription = "Export", modifier = Modifier.padding(end = 8.dp))
+                                Text("Export")
+                            }
+                            Button(onClick = { importLauncher.launch("application/json") }) {
+                                Icon(Icons.Outlined.FileDownload, contentDescription = "Import", modifier = Modifier.padding(end = 8.dp))
+                                Text("Import")
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                        TextButton(
+                            onClick = { showDeleteAllDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                             Icon(Icons.Outlined.Delete, contentDescription = "Delete All", tint = MaterialTheme.colorScheme.error, modifier = Modifier.padding(end = 8.dp))
+                             Text("Delete All Contacts", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                if (isRoleAvailable) {
+                    Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Caller ID", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (isCallerIdEnabled) "Enabled" else "Disabled")
+                                Button(onClick = {
+                                    if (roleManager != null) {
+                                        val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_CALL_SCREENING)
+                                        requestRoleLauncher.launch(intent)
+                                    }
+                                }) {
+                                    Text(if (isCallerIdEnabled) "Change Default" else "Set as Default")
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Contact & Support", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TextButton(
-                        onClick = {
-                            val appVersion = try {
-                                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                                "${pInfo.versionName} (${pInfo.versionCode})"
-                            } catch (e: Exception) {
-                                "N/A"
-                            }
+                Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Contact & Support", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TextButton(
+                            onClick = {
+                                val appVersion = try {
+                                    val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                                    "${pInfo.versionName} (${pInfo.versionCode})"
+                                } catch (e: Exception) {
+                                    "N/A"
+                                }
 
-                            val deviceInfo = "Device: ${Build.MANUFACTURER} ${Build.MODEL}\n" +
-                                             "Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
-                                             "App Version: $appVersion"
+                                val deviceInfo = "Device: ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+                                                 "Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+                                                 "App Version: $appVersion"
 
-                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                data = Uri.parse("mailto:")
-                                putExtra(Intent.EXTRA_EMAIL, arrayOf("yashgarg2801@outlook.com"))
-                                putExtra(Intent.EXTRA_SUBJECT, "Bug Report for BrnBook")
-                                putExtra(Intent.EXTRA_TEXT, "Please describe the bug:\n\n\n---\n$deviceInfo")
-                            }
-                            try {
-                                context.startActivity(intent)
-                            } catch (e: ActivityNotFoundException) {
-                                Toast.makeText(context, "No email app found.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Outlined.BugReport, contentDescription = "Report a bug", modifier = Modifier.padding(end = 8.dp))
-                        Text("Report a bug")
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:")
+                                    putExtra(Intent.EXTRA_EMAIL, arrayOf("burnerbook07@gmail.com"))
+                                    putExtra(Intent.EXTRA_SUBJECT, "Bug Report for Burner Book")
+                                    putExtra(Intent.EXTRA_TEXT, "Please describe the bug:\n\n\n---\n$deviceInfo")
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: ActivityNotFoundException) {
+                                    Toast.makeText(context, "No email app found.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.BugReport, contentDescription = "Report a bug", modifier = Modifier.padding(end = 8.dp))
+                            Text("Report a bug")
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp)) // Add space at the bottom
             }
-            Spacer(Modifier.weight(1f))
             AppVersionInfo()
         }
     }
@@ -309,6 +321,7 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ThemeCard(
     modifier: Modifier = Modifier,
@@ -347,7 +360,7 @@ fun AppVersionInfo() {
         "Version N/A"
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Text(
             text = version,
             style = MaterialTheme.typography.bodySmall,

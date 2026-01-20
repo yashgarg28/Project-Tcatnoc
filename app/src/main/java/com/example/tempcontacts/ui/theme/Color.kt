@@ -30,8 +30,8 @@ val md_theme_light_onSurfaceVariant = Color(0xFF49454F)
 val md_theme_light_outline = Color(0xFF79747E)
 
 // Dark Theme Colors
-val md_theme_dark_primary = Color(0xFF9FA8DA) // Lighter Indigo
-val md_theme_dark_onPrimary = Color(0xFF1A237E)
+val md_theme_dark_primary = Color(0xFF293493) // Deep Indigo
+val md_theme_dark_onPrimary = Color.White // High contrast for deep indigo
 val md_theme_dark_primaryContainer = Color(0xFF283593)
 val md_theme_dark_onPrimaryContainer = Color(0xFFC5CAE9)
 val md_theme_dark_secondary = Color(0xFF8C9EFF)

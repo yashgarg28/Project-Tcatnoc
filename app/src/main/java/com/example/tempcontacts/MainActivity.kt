@@ -16,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         settingsDataStore = SettingsDataStore(this)
         createNotificationChannels()
         askForPermissions()
@@ -255,16 +256,19 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding)) {
-            items(groupedContacts.entries.toList()) { (letter, contacts) ->
-                Column {
+            filteredContacts.forEach { (letter, contacts) ->
+                stickyHeader {
                     Text(
                         text = letter.toString(),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                }
+                item {
                     Card(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),

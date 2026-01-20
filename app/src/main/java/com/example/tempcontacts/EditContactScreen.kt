@@ -4,11 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -39,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -97,7 +103,12 @@ fun EditContactScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -142,23 +153,47 @@ fun EditContactScreen(
             Spacer(modifier = Modifier.height(32.dp))
             
             Text("Auto-Delete Duration")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = selectedChip == "no_time", onClick = { 
-                    selectedChip = "no_time"
-                    selectedDurationMillis = null
-                 }, label = { Text("Don't delete") })
-                FilterChip(selected = selectedChip == "24h", onClick = { 
-                    selectedChip = "24h"
-                    selectedDurationMillis = TimeUnit.HOURS.toMillis(24)
-                 }, label = { Text("24 Hours") })
-                FilterChip(selected = selectedChip == "7d", onClick = { 
-                    selectedChip = "7d"
-                    selectedDurationMillis = TimeUnit.DAYS.toMillis(7)
-                 }, label = { Text("7 Days") })
-                FilterChip(selected = selectedChip == "custom", onClick = { 
-                    selectedChip = "custom"
-                    showBottomSheet = true
-                 }, label = { Text(customDurationLabel) })
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = selectedChip == "no_time",
+                        onClick = { 
+                            selectedChip = "no_time"
+                            selectedDurationMillis = null
+                        },
+                        label = { Text("Don't delete", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                    )
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = selectedChip == "24h",
+                        onClick = { 
+                            selectedChip = "24h"
+                            selectedDurationMillis = TimeUnit.HOURS.toMillis(24)
+                        },
+                        label = { Text("24 Hours", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = selectedChip == "7d",
+                        onClick = { 
+                            selectedChip = "7d"
+                            selectedDurationMillis = TimeUnit.DAYS.toMillis(7)
+                        },
+                        label = { Text("7 Days", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                    )
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = selectedChip == "custom",
+                        onClick = { 
+                            selectedChip = "custom"
+                            showBottomSheet = true
+                        },
+                        label = { Text(customDurationLabel, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -177,7 +212,7 @@ fun EditContactScreen(
                         onContactUpdated()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 enabled = name.isNotBlank() && isPhoneNumberValid
             ) {
                 Text(if (contactId == 0) "Add Contact" else "Save Changes")
@@ -261,5 +296,6 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
                 Text("Set")
             }
         }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 }
