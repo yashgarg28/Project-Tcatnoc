@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.tempcontacts"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.3.1"
+        versionCode = 12
+        versionName = "3.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.gson)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Room
     implementation(libs.androidx.room.runtime)

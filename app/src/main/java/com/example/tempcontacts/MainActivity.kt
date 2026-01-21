@@ -40,6 +40,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.tempcontacts.ui.theme.TempContactsTheme
 import androidx.navigation.NavType
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 
 const val ABOUT_ROUTE = "about_page"
 const val PRIVACY_ROUTE = "privacy_policy_screen"
@@ -73,76 +76,116 @@ class MainActivity : ComponentActivity() {
             TempContactsTheme(darkTheme = useDarkTheme) {
                 if (hasSeenOnboarding != null) {
                     val navController = rememberNavController()
-                    val startDestination = if (hasSeenOnboarding == true) "contactList" else "onboarding"
+                    val startDestination =
+                        if (hasSeenOnboarding == true) "contactList" else "onboarding"
 
-                    NavHost(navController = navController, startDestination = startDestination) {
+                    // The Surface wrapper provides the background color during animations
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = startDestination,
+                            enterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { 1000 },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(300))
+                            },
+                            exitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { -1000 },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(300))
+                            },
+                            popEnterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { -1000 },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(300))
+                            },
+                            popExitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { 1000 },
+                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(300))
+                            }
+                        ) {
+                            composable("onboarding") {
+                                val onboardingViewModel: OnboardingViewModel =
+                                    viewModel(factory = OnboardingViewModelFactory(settingsDataStore))
+                                OnboardingScreen(onOnboardingComplete = {
+                                    onboardingViewModel.saveOnboardingSeen()
+                                    navController.navigate("contactList") {
+                                        popUpTo("onboarding") { inclusive = true }
+                                    }
+                                })
+                            }
 
-                        composable("onboarding") {
-                            val onboardingViewModel: OnboardingViewModel = viewModel(factory = OnboardingViewModelFactory(settingsDataStore))
-                            OnboardingScreen(onOnboardingComplete = {
-                                onboardingViewModel.saveOnboardingSeen()
-                                navController.navigate("contactList") { popUpTo("onboarding") { inclusive = true } }
-                            })
-                        }
+                            composable("contactList") {
+                                ContactListScreen(
+                                    viewModel = viewModel,
+                                    onContactClick = { id ->
+                                        if (id == 0) navController.navigate("editContact/0")
+                                        else navController.navigate("contactDetail/$id")
+                                    },
+                                    onSettingsClick = { navController.navigate("settings") }
+                                )
+                            }
 
-                        composable("contactList") {
-                            ContactListScreen(
-                                viewModel = viewModel,
-                                onContactClick = { id ->
-                                    if (id == 0) navController.navigate("editContact/0")
-                                    else navController.navigate("contactDetail/$id")
-                                },
-                                onSettingsClick = { navController.navigate("settings") }
-                            )
-                        }
+                            composable(
+                                "contactDetail/{contactId}",
+                                arguments = listOf(navArgument("contactId") {
+                                    type = NavType.IntType
+                                })
+                            ) { backStackEntry ->
+                                val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                                ContactDetailScreen(
+                                    viewModel = viewModel,
+                                    contactId = contactId,
+                                    onBackClick = { navController.popBackStack() },
+                                    onEditClick = {
+                                        navController.navigate("editContact/$contactId")
+                                    }
+                                )
+                            }
 
-                        composable(
-                            "contactDetail/{contactId}",
-                            arguments = listOf(navArgument("contactId") { type = NavType.IntType })
-                        ) { backStackEntry ->
-                            // 1. Extract the ID from the arguments first
-                            val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                            composable(
+                                "editContact/{contactId}",
+                                arguments = listOf(navArgument("contactId") {
+                                    type = NavType.IntType; defaultValue = 0
+                                })
+                            ) { entry ->
+                                EditContactScreen(
+                                    viewModel = viewModel,
+                                    contactId = entry.arguments?.getInt("contactId") ?: 0,
+                                    onContactUpdated = { navController.popBackStack() },
+                                    onBackClick = { navController.popBackStack() }
+                                )
+                            }
 
-                            // 2. Now you can safely use 'contactId' below
-                            ContactDetailScreen(
-                                viewModel = viewModel,
-                                contactId = contactId,
-                                onBackClick = { navController.popBackStack() },
-                                onEditClick = {
-                                    navController.navigate("editContact/$contactId")
-                                }
-                            )
-                        }
+                            composable("settings") {
+                                SettingsScreen(
+                                    viewModel = viewModel,
+                                    settingsDataStore = settingsDataStore,
+                                    onBackClick = { navController.popBackStack() },
+                                    onAboutClick = { navController.navigate(ABOUT_ROUTE) }
+                                )
+                            }
 
-                        composable("editContact/{contactId}", arguments = listOf(navArgument("contactId") { defaultValue = 0 })) { entry ->
-                            EditContactScreen(
-                                viewModel = viewModel,
-                                contactId = entry.arguments?.getInt("contactId") ?: 0,
-                                onContactUpdated = { navController.popBackStack() },
-                                onBackClick = { navController.popBackStack() }
-                            )
-                        }
+                            composable(ABOUT_ROUTE) {
+                                AboutScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onPrivacyPolicyClick = { navController.navigate(PRIVACY_ROUTE) }
+                                )
+                            }
 
-                        composable("settings") {
-                            SettingsScreen(
-                                viewModel = viewModel,
-                                settingsDataStore = settingsDataStore,
-                                onBackClick = { navController.popBackStack() },
-                                onAboutClick = { navController.navigate(ABOUT_ROUTE) }
-                            )
-                        }
-
-                        composable(ABOUT_ROUTE) {
-                            AboutScreen(
-                                onBackClick = { navController.popBackStack() },
-                                onPrivacyPolicyClick = { navController.navigate(PRIVACY_ROUTE) }
-                            )
-                        }
-
-                        composable(PRIVACY_ROUTE) {
-                            PrivacyPolicyScreen(onBackClick = { navController.popBackStack() })
-                        }
-                    }
+                            composable(PRIVACY_ROUTE) {
+                                PrivacyPolicyScreen(onBackClick = { navController.popBackStack() })
+                            }
+                        } // End NavHost
+                    } // End Surface
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
@@ -151,7 +194,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     private fun askForPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

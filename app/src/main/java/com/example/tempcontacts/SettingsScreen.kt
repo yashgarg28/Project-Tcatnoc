@@ -11,9 +11,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -283,16 +285,16 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Outlined.BugReport, contentDescription = "Report a bug", modifier = Modifier.padding(end = 8.dp))
-                        Text("Report a bug")
+                        Icon(Icons.Outlined.BugReport, contentDescription = "Report a bug", modifier = Modifier.padding(end = 8.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Report a bug", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     TextButton(
                         onClick = onAboutClick,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Outlined.Info, contentDescription = "About", modifier = Modifier.padding(end = 8.dp))
-                        Text("About")
+                        Icon(Icons.Outlined.Info, contentDescription = "About", modifier = Modifier.padding(end = 8.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("About", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.scale
 
 // Helper function to get the version name from build.gradle dynamically
 fun getAppVersionName(context: Context): String {
@@ -67,19 +69,23 @@ fun AboutScreen(onBackClick: () -> Unit, onPrivacyPolicyClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // App Header
-            Surface(
-                modifier = Modifier.size(90.dp),
+            Card(
+                modifier = Modifier.size(100.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shadowElevation = 4.dp
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF001C38) // Replace this Hex with your exact logo blue
+                ),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
-                Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher),
-                    contentDescription = "App Logo",
-                    modifier = Modifier
-                        .size(60.dp)
-                        .padding(4.dp)
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                        contentDescription = "App Logo",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(1.5f) // This "Zooms" the foreground to remove the white safe-zone
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text("Burner Book™", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
