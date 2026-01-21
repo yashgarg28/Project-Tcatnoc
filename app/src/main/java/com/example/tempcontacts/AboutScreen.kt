@@ -24,6 +24,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.scale
+import androidx.navigation.NavHostController
+import androidx.navigation.NavController
+import androidx.compose.ui.layout.ContentScale
 
 // Helper function to get the version name from build.gradle dynamically
 fun getAppVersionName(context: Context): String {
@@ -42,11 +45,14 @@ fun getAppVersionName(context: Context): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBackClick: () -> Unit, onPrivacyPolicyClick: () -> Unit) {
+fun AboutScreen(
+    navController: NavHostController, // <--- Put it here with a comma
+    onBackClick: () -> Unit,
+    onPrivacyPolicyClick: () -> Unit
+) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val currentVersion = getAppVersionName(context)
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -69,24 +75,15 @@ fun AboutScreen(onBackClick: () -> Unit, onPrivacyPolicyClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // App Header
-            Card(
-                modifier = Modifier.size(100.dp),
-                shape = CircleShape,
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF001C38) // Replace this Hex with your exact logo blue
-                ),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                        contentDescription = "App Logo",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .scale(1.5f) // This "Zooms" the foreground to remove the white safe-zone
-                    )
-                }
-            }
+            Image(
+                painter = painterResource(id = R.mipmap.logo_png),
+                contentDescription = "App Logo",
+                modifier = Modifier
+                    .size(120.dp) // Adjusted size for a cleaner look
+                    .padding(8.dp),
+                contentScale = ContentScale.Fit
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
             Text("Burner Book™", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
@@ -170,6 +167,13 @@ fun AboutScreen(onBackClick: () -> Unit, onPrivacyPolicyClick: () -> Unit) {
                             }
                             context.startActivity(Intent.createChooser(sendIntent, "Share Beta Invite"))
                         }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    AboutClickableRow(
+                        icon = Icons.Outlined.Gavel, // Legal/License icon
+                        text = "Open Source Licenses",
+                        onClick = { navController.navigate("licenses") } // Or pass this as a parameter to the Composable
                     )
                 }
             }

@@ -8,3 +8,4 @@
 2.2.2 and 10 - fixed some ui bugs
 2.3.1 and 11 - added the entire about page
 3.1.1 and 12 - Added the new logo, added a new animation
+3.2.1 and 13 - Added empty contact list text and animation, licenses in about page and optimised search bar.
