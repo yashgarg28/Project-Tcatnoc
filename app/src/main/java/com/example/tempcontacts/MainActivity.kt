@@ -9,7 +9,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
+import androidx.activity.viewModels // Required for 'by viewModels()'
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -19,7 +19,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,17 +45,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.compose.viewModel // Required for 'viewModel()' in composables
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.tempcontacts.ui.theme.TempContactsTheme
+// Firebase Imports
+import com.google.firebase.appdistribution.FirebaseAppDistribution
+import com.google.firebase.appdistribution.InterruptionLevel
 
 const val ABOUT_ROUTE = "about_page"
 
 class MainActivity : ComponentActivity() {
 
+    // Helper to get VM at Activity level
     private val viewModel: ContactViewModel by viewModels()
     private lateinit var settingsDataStore: SettingsDataStore
 
@@ -68,11 +71,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         settingsDataStore = SettingsDataStore(this)
+
         createNotificationChannels()
         askForPermissions()
+        setupFirebaseFeedback()
 
         setContent {
             val theme by settingsDataStore.themeFlow.collectAsState(initial = "System")
+
+            // Determine the actual theme (Dark or Light)
             val useDarkTheme = when (theme) {
                 "Light" -> false
                 "Dark" -> true
@@ -80,97 +87,110 @@ class MainActivity : ComponentActivity() {
             }
 
             val hasSeenOnboarding by settingsDataStore.hasSeenOnboardingFlow.collectAsState(initial = null)
+            val snackbarHostState = remember { SnackbarHostState() }
 
             TempContactsTheme(darkTheme = useDarkTheme) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    if (hasSeenOnboarding != null) {
-                        val navController = rememberNavController()
-                        val startDestination = if (hasSeenOnboarding == true) "contactList" else "onboarding"
+                Scaffold(
+                    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                    // This ensures the scaffold doesn't automatically consume the window insets
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0)
+                ) { padding ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // We apply only the bottom padding (for gesture bar)
+                            // but IGNORE top padding so the inner TopAppBar looks correct.
+                            .padding(bottom = padding.calculateBottomPadding()),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        if (hasSeenOnboarding != null) {
+                            val navController = rememberNavController()
+                            val startDestination = if (hasSeenOnboarding == true) "contactList" else "onboarding"
 
-                        NavHost(
-                            navController = navController,
-                            startDestination = startDestination,
-                            enterTransition = { slideInHorizontally(initialOffsetX = { 1000 }, animationSpec = tween(500)) + fadeIn() },
-                            exitTransition = { slideOutHorizontally(targetOffsetX = { -1000 }, animationSpec = tween(500)) + fadeOut() },
-                            popEnterTransition = { slideInHorizontally(initialOffsetX = { -1000 }, animationSpec = tween(500)) + fadeIn() },
-                            popExitTransition = { slideOutHorizontally(targetOffsetX = { 1000 }, animationSpec = tween(500)) + fadeOut() }
-                        ) {
-                            composable("onboarding") {
-                                val onboardingViewModel: OnboardingViewModel = viewModel(factory = OnboardingViewModelFactory(settingsDataStore))
-                                OnboardingScreen(onOnboardingComplete = {
-                                    onboardingViewModel.saveOnboardingSeen()
-                                    navController.navigate("contactList") { popUpTo("onboarding") { inclusive = true } }
-                                })
-                            }
+                            NavHost(
+                                navController = navController,
+                                startDestination = startDestination
+                            ) {
+                                composable("onboarding") {
+                                    // Using the factory to create VM inside Compose
+                                    val onboardingViewModel: OnboardingViewModel = viewModel(
+                                        factory = OnboardingViewModelFactory(settingsDataStore)
+                                    )
+                                    OnboardingScreen(onOnboardingComplete = {
+                                        onboardingViewModel.saveOnboardingSeen()
+                                        navController.navigate("contactList") {
+                                            popUpTo("onboarding") { inclusive = true }
+                                        }
+                                    })
+                                }
 
-                            composable("contactList") {
-                                ContactListScreen(
-                                    viewModel = viewModel,
-                                    onContactClick = { contactId ->
-                                        if (contactId == 0) navController.navigate("editContact/0")
-                                        else navController.navigate("contactDetail/$contactId")
-                                    },
-                                    onSettingsClick = { navController.navigate("settings") }
-                                )
-                            }
+                                composable("contactList") {
+                                    ContactListScreen(
+                                        viewModel = viewModel,
+                                        isDarkTheme = useDarkTheme,
+                                        onContactClick = { contactId ->
+                                            if (contactId == 0) navController.navigate("editContact/0")
+                                            else navController.navigate("contactDetail/$contactId")
+                                        },
+                                        onSettingsClick = { navController.navigate("settings") }
+                                    )
+                                }
 
-                            composable(
-                                "contactDetail/{contactId}",
-                                arguments = listOf(navArgument("contactId") { defaultValue = 0 })
-                            ) { backStackEntry ->
-                                val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
-                                ContactDetailScreen(
-                                    viewModel = viewModel,
-                                    contactId = contactId,
-                                    onBackClick = { navController.popBackStack() },
-                                    onEditClick = { navController.navigate("editContact/$contactId") }
-                                )
-                            }
+                                composable(
+                                    "contactDetail/{contactId}",
+                                    arguments = listOf(navArgument("contactId") { defaultValue = 0 })
+                                ) { backStackEntry ->
+                                    val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                                    ContactDetailScreen(
+                                        viewModel = viewModel,
+                                        contactId = contactId,
+                                        onBackClick = { navController.popBackStack() },
+                                        onEditClick = { navController.navigate("editContact/$contactId") }
+                                    )
+                                }
 
-                            composable(
-                                "editContact/{contactId}",
-                                arguments = listOf(navArgument("contactId") { defaultValue = 0 })
-                            ) { backStackEntry ->
-                                val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
-                                EditContactScreen(
-                                    viewModel = viewModel,
-                                    contactId = contactId,
-                                    onContactUpdated = { navController.popBackStack() },
-                                    onBackClick = { navController.popBackStack() }
-                                )
-                            }
+                                composable(
+                                    "editContact/{contactId}",
+                                    arguments = listOf(navArgument("contactId") { defaultValue = 0 })
+                                ) { backStackEntry ->
+                                    val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
+                                    EditContactScreen(
+                                        viewModel = viewModel,
+                                        contactId = contactId,
+                                        onContactUpdated = { navController.popBackStack() },
+                                        onBackClick = { navController.popBackStack() }
+                                    )
+                                }
 
-                            composable("settings") {
-                                SettingsScreen(
-                                    viewModel = viewModel,
-                                    settingsDataStore = settingsDataStore,
-                                    onBackClick = { navController.popBackStack() },
-                                    onAboutClick = { navController.navigate(ABOUT_ROUTE) }
-                                )
-                            }
+                                composable("settings") {
+                                    SettingsScreen(
+                                        viewModel = viewModel,
+                                        settingsDataStore = settingsDataStore,
+                                        onBackClick = { navController.popBackStack() },
+                                        onAboutClick = { navController.navigate(ABOUT_ROUTE) }
+                                    )
+                                }
 
-                            composable(ABOUT_ROUTE) {
-                                AboutScreen(
-                                    navController = navController, // <--- ADD THIS LINE
-                                    onBackClick = { navController.popBackStack() },
-                                    onPrivacyPolicyClick = { navController.navigate("privacy_policy_screen") }
-                                )
-                            }
+                                composable(ABOUT_ROUTE) {
+                                    AboutScreen(
+                                        navController = navController,
+                                        isDarkTheme = useDarkTheme,
+                                        onBackClick = { navController.popBackStack() },
+                                        onPrivacyPolicyClick = { navController.navigate("privacy_policy_screen") }
+                                    )
+                                }
 
-                            composable("privacy_policy_screen") {
-                                PrivacyPolicyScreen(onBackClick = { navController.popBackStack() })
+                                composable("privacy_policy_screen") {
+                                    PrivacyPolicyScreen { navController.popBackStack() }
+                                }
+                                composable("licenses") {
+                                    LicensesScreen { navController.popBackStack() }
+                                }
                             }
-
-                            composable("licenses") {
-                                LicensesScreen(onBackClick = { navController.popBackStack() })
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
                             }
-                        }
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
                         }
                     }
                 }
@@ -178,10 +198,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun setupFirebaseFeedback() {
+        val appDistro = FirebaseAppDistribution.getInstance()
+
+        // FIX: Must pass InterruptionLevel.DEFAULT to satisfy the compiler
+        appDistro.showFeedbackNotification(
+            "Found a bug? Tap to send feedback!",
+            InterruptionLevel.DEFAULT
+        )
+    }
+
     private fun askForPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
@@ -189,45 +218,34 @@ class MainActivity : ComponentActivity() {
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val deletionChannel = NotificationChannel(
-                "contact_deletion_channel",
-                "Contact Deletion",
-                NotificationManager.IMPORTANCE_HIGH
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(
+                NotificationChannel("contact_deletion_channel", "Contact Deletion", NotificationManager.IMPORTANCE_HIGH)
             )
-            val callerIdChannel = NotificationChannel(
-                "brnbook_caller_id_channel",
-                "BrnBook Caller ID",
-                NotificationManager.IMPORTANCE_HIGH
+            manager.createNotificationChannel(
+                NotificationChannel("brnbook_caller_id_channel", "BrnBook Caller ID", NotificationManager.IMPORTANCE_HIGH)
             )
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(deletionChannel)
-            notificationManager.createNotificationChannel(callerIdChannel)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit, onSettingsClick: () -> Unit) {
+fun ContactListScreen(
+    viewModel: ContactViewModel,
+    isDarkTheme: Boolean,
+    onContactClick: (Int) -> Unit,
+    onSettingsClick: () -> Unit
+) {
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
-    // Logic for filtering by name OR phone number
-    val filteredContacts = if (searchQuery.isEmpty()) {
-        groupedContacts
-    } else {
-        groupedContacts.mapValues { (_, contacts) ->
-            contacts.filter {
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                        it.phone.contains(searchQuery)
-            }
+    val filteredContacts = if (searchQuery.isEmpty()) groupedContacts else {
+        groupedContacts.mapValues { (_, c) ->
+            c.filter { it.name.contains(searchQuery, true) || it.phone.contains(searchQuery) }
         }.filterValues { it.isNotEmpty() }
-    }
-
-    LaunchedEffect(isSearching) {
-        if (isSearching) focusRequester.requestFocus()
     }
 
     Scaffold(
@@ -238,31 +256,27 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search name or number") },
+                            placeholder = { Text("Search...") },
                             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent
                             )
                         )
-                    } else {
-                        Text("Contacts")
-                    }
+                    } else { Text("Contacts") }
                 },
                 actions = {
                     if (isSearching) {
                         IconButton(onClick = { isSearching = false; searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                            Icon(Icons.Default.Close, null)
                         }
                     } else {
                         IconButton(onClick = { isSearching = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
+                            Icon(Icons.Default.Search, null)
                         }
                         IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            Icon(Icons.Default.Settings, null)
                         }
                     }
                 }
@@ -270,62 +284,35 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { onContactClick(0) }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Contact")
+                Icon(Icons.Default.Add, null)
             }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (filteredContacts.isEmpty()) {
                 if (searchQuery.isNotEmpty()) {
-                    // --- CASE 1: NO SEARCH RESULTS FOUND ---
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No results found for \"$searchQuery\"",
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text("No results", modifier = Modifier.align(Alignment.Center))
                 } else {
-                    // --- CASE 2: EMPTY LIST BRANDING ---
-                    EmptyListBranding()
+                    EmptyListBranding(isDarkTheme = isDarkTheme)
                 }
             } else {
-                // --- CASE 3: DISPLAY LIST ---
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     filteredContacts.forEach { (letter, contacts) ->
                         stickyHeader {
                             Text(
-                                text = letter.toString(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                                letter.toString(),
+                                Modifier.fillMaxWidth()
                                     .background(MaterialTheme.colorScheme.background)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.titleMedium,
+                                    .padding(16.dp, 8.dp),
                                 fontWeight = FontWeight.Bold
                             )
                         }
                         item {
-                            Card(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
+                            Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
                                 Column {
-                                    contacts.forEachIndexed { index, contact ->
-                                        ContactCard(contact = contact, onClick = { onContactClick(contact.id) })
-                                        if (index < contacts.lastIndex) {
-                                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                                        }
+                                    contacts.forEachIndexed { i, c ->
+                                        ContactCard(c, isDarkTheme) { onContactClick(c.id) }
+                                        if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                                     }
                                 }
                             }
@@ -338,63 +325,105 @@ fun ContactListScreen(viewModel: ContactViewModel, onContactClick: (Int) -> Unit
 }
 
 @Composable
-fun EmptyListBranding() {
+fun EmptyListBranding(isDarkTheme: Boolean) {
     var isAnimated by remember { mutableStateOf(false) }
+
+    // Logic: Black text for Light Mode, White text for Dark Mode
+    val brandColor = if (isDarkTheme) Color.White else Color.Black
+
     LaunchedEffect(Unit) { isAnimated = true }
 
-    val alpha by animateFloatAsState(targetValue = if (isAnimated) 1f else 0f, animationSpec = tween(1000), label = "")
-    val scale by animateFloatAsState(targetValue = if (isAnimated) 1f else 0.8f, animationSpec = tween(1000), label = "")
+    val alpha by animateFloatAsState(if (isAnimated) 1f else 0f, tween(1000), label = "")
+    val scale by animateFloatAsState(if (isAnimated) 1f else 0.8f, tween(1000), label = "")
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
+        Spacer(modifier = Modifier.height(80.dp))
+
         Image(
-            painter = painterResource(id = R.mipmap.logo_png),
-            contentDescription = null,
-            modifier = Modifier.size(120.dp).graphicsLayer(alpha = alpha * 0.4f, scaleX = scale, scaleY = scale),
+            painter = painterResource(id = if (isDarkTheme) R.mipmap.burnerlogowhite else R.mipmap.burnerlogoblue),
+            contentDescription = "Logo",
+            modifier = Modifier.size(200.dp).graphicsLayer(alpha = alpha, scaleX = scale, scaleY = scale),
             contentScale = ContentScale.Fit
         )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "Your Contact Book is Empty",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = brandColor,
+            modifier = Modifier.graphicsLayer(alpha = alpha)
+        )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "Burner Book™", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.graphicsLayer(alpha = alpha))
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(text = "Your Contact Book is Empty", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.graphicsLayer(alpha = alpha))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "Start by adding a temporary contact.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f), textAlign = TextAlign.Center, modifier = Modifier.graphicsLayer(alpha = alpha))
+        Text(
+            text = "Start by adding a temporary contact.",
+            color = brandColor.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.graphicsLayer(alpha = alpha)
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize().padding(bottom = 100.dp, end = 32.dp)) {
-        Row(modifier = Modifier.align(Alignment.BottomEnd).graphicsLayer(alpha = alpha), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Start by adding a contact", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f))
-            Icon(Icons.Default.ArrowForward, null, modifier = Modifier.size(40.dp).rotate(45f), tint = MaterialTheme.colorScheme.onBackground)
+        Row(
+            Modifier.align(Alignment.BottomEnd).graphicsLayer(alpha = alpha),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Start by adding a contact",
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                color = brandColor.copy(alpha = 0.8f)
+            )
+            Icon(
+                Icons.Default.ArrowForward,
+                null,
+                modifier = Modifier.size(40.dp).rotate(45f),
+                tint = brandColor
+            )
         }
     }
 }
 
 @Composable
-fun ContactCard(contact: Contact, onClick: () -> Unit) {
+fun ContactCard(contact: Contact, isDarkTheme: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-            Text(text = contact.name.first().toString(), color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Box(
+            Modifier.size(48.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            Alignment.Center
+        ) {
+            Text(
+                text = contact.name.first().toString(),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = contact.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-            Text(text = contact.phone, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = contact.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = contact.phone,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-
-        // --- UPDATED TIMER ICON LOGIC ---
         if (contact.deletionTimestamp != null) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_timer),
-                contentDescription = "Timer Active",
-                // This ensures it uses the theme's primary color
-                // (which is bright/high contrast in Dark Mode)
-                tint = MaterialTheme.colorScheme.primary
+                painterResource(R.drawable.ic_timer),
+                "Timer",
+                tint = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.primary
             )
         }
     }

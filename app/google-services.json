@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "378876534788",
+    "project_id": "burner-book",
+    "storage_bucket": "burner-book.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:378876534788:android:e2df6d8956efd0d3185551",
+        "android_client_info": {
+          "package_name": "com.example.tempcontacts"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJlSeYG4HUGX-QiaTBpwc9aULMljDzqas"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

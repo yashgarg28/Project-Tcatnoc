@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -15,8 +16,8 @@ android {
         applicationId = "com.example.tempcontacts"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "3.2.1"
+        versionCode = 14
+        versionName = "3.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -56,6 +57,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.gson)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.google.firebase:firebase-appdistribution:16.0.0-beta17")
 
     // Room
     implementation(libs.androidx.room.runtime)
