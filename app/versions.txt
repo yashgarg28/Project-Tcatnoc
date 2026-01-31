@@ -10,3 +10,4 @@
 3.1.1 and 12 - Added the new logo, added a new animation
 3.2.1 and 13 - Added empty contact list text and animation, licenses in about page and optimised search bar.
 3.3.1 and 14 - Changed the app logo, changed the empty list logo, text and position. Added firebase feedback
+3.4.1 and 15 - Added Beta Tester Guide and changed ui for caller id
