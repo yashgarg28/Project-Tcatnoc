@@ -11,3 +11,4 @@
 3.2.1 and 13 - Added empty contact list text and animation, licenses in about page and optimised search bar.
 3.3.1 and 14 - Changed the app logo, changed the empty list logo, text and position. Added firebase feedback
 3.4.1 and 15 - Added Beta Tester Guide and changed ui for caller id
+3.5.1 and 16 - Added a guide dialogue to enable caller id settings after first contact is saved. Added a toast notification for new contact saved.

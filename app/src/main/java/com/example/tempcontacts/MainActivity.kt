@@ -9,7 +9,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels // Required for 'by viewModels()'
+import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -45,13 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel // Required for 'viewModel()' in composables
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.tempcontacts.ui.theme.TempContactsTheme
-// Firebase Imports
 import com.google.firebase.appdistribution.FirebaseAppDistribution
 import com.google.firebase.appdistribution.InterruptionLevel
 
@@ -59,7 +58,6 @@ const val ABOUT_ROUTE = "about_page"
 
 class MainActivity : ComponentActivity() {
 
-    // Helper to get VM at Activity level
     private val viewModel: ContactViewModel by viewModels()
     private lateinit var settingsDataStore: SettingsDataStore
 
@@ -78,8 +76,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val theme by settingsDataStore.themeFlow.collectAsState(initial = "System")
-
-            // Determine the actual theme (Dark or Light)
             val useDarkTheme = when (theme) {
                 "Light" -> false
                 "Dark" -> true
@@ -92,14 +88,11 @@ class MainActivity : ComponentActivity() {
             TempContactsTheme(darkTheme = useDarkTheme) {
                 Scaffold(
                     snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                    // This ensures the scaffold doesn't automatically consume the window insets
                     contentWindowInsets = WindowInsets(0, 0, 0, 0)
                 ) { padding ->
                     Surface(
                         modifier = Modifier
                             .fillMaxSize()
-                            // We apply only the bottom padding (for gesture bar)
-                            // but IGNORE top padding so the inner TopAppBar looks correct.
                             .padding(bottom = padding.calculateBottomPadding()),
                         color = MaterialTheme.colorScheme.background
                     ) {
@@ -112,7 +105,6 @@ class MainActivity : ComponentActivity() {
                                 startDestination = startDestination
                             ) {
                                 composable("onboarding") {
-                                    // Using the factory to create VM inside Compose
                                     val onboardingViewModel: OnboardingViewModel = viewModel(
                                         factory = OnboardingViewModelFactory(settingsDataStore)
                                     )
@@ -156,6 +148,7 @@ class MainActivity : ComponentActivity() {
                                     val contactId = backStackEntry.arguments?.getInt("contactId") ?: 0
                                     EditContactScreen(
                                         viewModel = viewModel,
+                                        settingsDataStore = settingsDataStore,
                                         contactId = contactId,
                                         onContactUpdated = { navController.popBackStack() },
                                         onBackClick = { navController.popBackStack() }
@@ -200,8 +193,6 @@ class MainActivity : ComponentActivity() {
 
     private fun setupFirebaseFeedback() {
         val appDistro = FirebaseAppDistribution.getInstance()
-
-        // FIX: Must pass InterruptionLevel.DEFAULT to satisfy the compiler
         appDistro.showFeedbackNotification(
             "Found a bug? Tap to send feedback!",
             InterruptionLevel.DEFAULT

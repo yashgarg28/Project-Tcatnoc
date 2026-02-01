@@ -1,47 +1,27 @@
 package com.example.tempcontacts
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import android.app.role.RoleManager
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.ContactPhone
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -53,13 +33,16 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun EditContactScreen(
     viewModel: ContactViewModel,
+    settingsDataStore: SettingsDataStore, // Added this parameter
     contactId: Int,
     onContactUpdated: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val contacts by viewModel.allContacts.collectAsState()
     val contact = contacts.find { it.id == contactId }
 
+    // --- State Management ---
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var country by remember { mutableStateOf(countryList.find { it.name == "India" } ?: countryList[0]) }
@@ -70,9 +53,32 @@ fun EditContactScreen(
     var customDurationLabel by remember { mutableStateOf("Custom") }
 
     var showBottomSheet by remember { mutableStateOf(false) }
+    var showCallerIdGuide by remember { mutableStateOf(false) }
+
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     var countryCodeExpanded by remember { mutableStateOf(false) }
+
+    // --- Services Setup (Vibrator & RoleManager) ---
+    val vibrator = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+    }
+
+    val roleManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+    } else null
+
+    val requestRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        onContactUpdated()
+    }
 
     LaunchedEffect(contact) {
         contact?.let {
@@ -89,6 +95,17 @@ fun EditContactScreen(
 
     LaunchedEffect(phone, country) {
         isPhoneNumberValid = phone.length == country.phoneLength
+    }
+
+    // Function to handle the success feedback (Vibration + Toast)
+    val triggerSuccessFeedback = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 150, 100, 250), -1))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(500)
+        }
+        Toast.makeText(context, "Contact Saved Successfully", Toast.LENGTH_SHORT).show()
     }
 
     Scaffold(
@@ -120,7 +137,11 @@ fun EditContactScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ExposedDropdownMenuBox(expanded = countryCodeExpanded, onExpandedChange = { countryCodeExpanded = !countryCodeExpanded }, modifier = Modifier.weight(0.4f)) {
+                ExposedDropdownMenuBox(
+                    expanded = countryCodeExpanded,
+                    onExpandedChange = { countryCodeExpanded = !countryCodeExpanded },
+                    modifier = Modifier.weight(0.4f)
+                ) {
                     OutlinedTextField(
                         value = "${country.flagEmoji} ${country.code}",
                         onValueChange = {},
@@ -128,12 +149,18 @@ fun EditContactScreen(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryCodeExpanded) },
                         modifier = Modifier.menuAnchor()
                     )
-                    ExposedDropdownMenu(expanded = countryCodeExpanded, onDismissRequest = { countryCodeExpanded = false }) {
+                    ExposedDropdownMenu(
+                        expanded = countryCodeExpanded,
+                        onDismissRequest = { countryCodeExpanded = false }
+                    ) {
                         countryList.forEach { c ->
-                            DropdownMenuItem(text = { Text("${c.flagEmoji} ${c.name} (${c.code})") }, onClick = { 
-                                country = c 
-                                countryCodeExpanded = false
-                            })
+                            DropdownMenuItem(
+                                text = { Text("${c.flagEmoji} ${c.name} (${c.code})") },
+                                onClick = {
+                                    country = c
+                                    countryCodeExpanded = false
+                                }
+                            )
                         }
                     }
                 }
@@ -151,14 +178,16 @@ fun EditContactScreen(
                 )
             }
             Spacer(modifier = Modifier.height(32.dp))
-            
-            Text("Auto-Delete Duration")
+
+            Text("Auto-Delete Duration", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         modifier = Modifier.weight(1f),
                         selected = selectedChip == "no_time",
-                        onClick = { 
+                        onClick = {
                             selectedChip = "no_time"
                             selectedDurationMillis = null
                         },
@@ -167,7 +196,7 @@ fun EditContactScreen(
                     FilterChip(
                         modifier = Modifier.weight(1f),
                         selected = selectedChip == "24h",
-                        onClick = { 
+                        onClick = {
                             selectedChip = "24h"
                             selectedDurationMillis = TimeUnit.HOURS.toMillis(24)
                         },
@@ -178,7 +207,7 @@ fun EditContactScreen(
                     FilterChip(
                         modifier = Modifier.weight(1f),
                         selected = selectedChip == "7d",
-                        onClick = { 
+                        onClick = {
                             selectedChip = "7d"
                             selectedDurationMillis = TimeUnit.DAYS.toMillis(7)
                         },
@@ -187,7 +216,7 @@ fun EditContactScreen(
                     FilterChip(
                         modifier = Modifier.weight(1f),
                         selected = selectedChip == "custom",
-                        onClick = { 
+                        onClick = {
                             selectedChip = "custom"
                             showBottomSheet = true
                         },
@@ -197,19 +226,35 @@ fun EditContactScreen(
             }
 
             Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
                     if (name.isNotBlank() && isPhoneNumberValid) {
                         val fullPhoneNumber = "${country.code} $phone"
                         val deletionTimestamp = selectedDurationMillis?.let { System.currentTimeMillis() + it }
-                        val updatedContact = contact?.copy(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp) ?: Contact(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
+                        val updatedContact = contact?.copy(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
+                            ?: Contact(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
+
                         if (contactId == 0) {
                             viewModel.insert(updatedContact)
+                            triggerSuccessFeedback()
+
+                            // Check if this is the very first contact
+                            if (contacts.isEmpty()) {
+                                // Mark setup as completed to prevent double-popup from MainActivity
+                                scope.launch {
+                                    settingsDataStore.saveFirstSetupCompleted()
+                                }
+                                showCallerIdGuide = true
+                            } else {
+                                onContactUpdated()
+                            }
                         } else {
                             viewModel.update(updatedContact)
+                            triggerSuccessFeedback()
+                            onContactUpdated()
                         }
-                        onContactUpdated()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -220,13 +265,53 @@ fun EditContactScreen(
         }
     }
 
+    // --- Caller ID Guide Dialog ---
+    if (showCallerIdGuide) {
+        AlertDialog(
+            onDismissRequest = {
+                showCallerIdGuide = false
+                onContactUpdated()
+            },
+            icon = { Icon(Icons.Outlined.ContactPhone, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Enable Caller ID?") },
+            text = {
+                Text(
+                    "Would you like to identify these contacts when they call? This helps you know who it is without cluttering your permanent phonebook.",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showCallerIdGuide = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        requestRoleLauncher.launch(intent)
+                    } else {
+                        onContactUpdated()
+                    }
+                }) {
+                    Text("Enable")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCallerIdGuide = false
+                    onContactUpdated()
+                }) {
+                    Text("Maybe Later")
+                }
+            }
+        )
+    }
+
+    // --- Bottom Sheet ---
     if (showBottomSheet) {
         ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState) {
             CustomDurationPicker(
                 onSet = { days, hours, minutes ->
                     val totalMillis = TimeUnit.DAYS.toMillis(days.toLong()) +
-                                      TimeUnit.HOURS.toMillis(hours.toLong()) +
-                                      TimeUnit.MINUTES.toMillis(minutes.toLong())
+                            TimeUnit.HOURS.toMillis(hours.toLong()) +
+                            TimeUnit.MINUTES.toMillis(minutes.toLong())
                     selectedDurationMillis = totalMillis
                     customDurationLabel = "Custom: ${days}d ${hours}h ${minutes}m"
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -234,7 +319,7 @@ fun EditContactScreen(
                     }
                 },
                 onCancel = {
-                     scope.launch { sheetState.hide() }.invokeOnCompletion {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) showBottomSheet = false
                     }
                 }
@@ -242,6 +327,8 @@ fun EditContactScreen(
         }
     }
 }
+
+// CustomDurationPicker code remains the same...
 
 @Composable
 fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, onCancel: () -> Unit) {
@@ -251,49 +338,49 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.padding(16.dp)) {
-        // Days Slider
+        Text("Custom Duration", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+
         Column {
             Text(text = "Days: ${days.toInt()}")
             Slider(
                 value = days,
                 onValueChange = { days = it },
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                valueRange = 0f..30f, 
+                valueRange = 0f..30f,
                 steps = 29
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        // Hours Slider
         Column {
             Text(text = "Hours: ${hours.toInt()}")
             Slider(
-                value = hours, 
-                onValueChange = { hours = it }, 
+                value = hours,
+                onValueChange = { hours = it },
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                valueRange = 0f..23f, 
+                valueRange = 0f..23f,
                 steps = 22
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        // Minutes Slider
         Column {
             Text(text = "Minutes: ${minutes.toInt()}")
             Slider(
-                value = minutes, 
-                onValueChange = { minutes = it }, 
+                value = minutes,
+                onValueChange = { minutes = it },
                 onValueChangeFinished = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                valueRange = 0f..59f, 
+                valueRange = 0f..59f,
                 steps = 58
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Button(onClick = onCancel) {
+            TextButton(onClick = onCancel) {
                 Text("Cancel")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = { onSet(days.toInt(), hours.toInt(), minutes.toInt()) }) {
-                Text("Set")
+                Text("Set Timer")
             }
         }
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))

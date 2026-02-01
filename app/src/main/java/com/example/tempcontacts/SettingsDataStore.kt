@@ -19,8 +19,12 @@ class SettingsDataStore(context: Context) {
     companion object {
         private val THEME_KEY = stringPreferencesKey("theme")
         private val HAS_SEEN_ONBOARDING_KEY = booleanPreferencesKey("has_seen_onboarding")
+
+        // Tracks if the user has seen the one-time Caller ID guide after their first contact
+        private val HAS_COMPLETED_FIRST_SETUP_KEY = booleanPreferencesKey("has_completed_first_setup")
     }
 
+    // --- Theme Logic ---
     val themeFlow: Flow<String> = appContext.dataStore.data.map {
         it[THEME_KEY] ?: "System"
     }
@@ -31,6 +35,7 @@ class SettingsDataStore(context: Context) {
         }
     }
 
+    // --- Onboarding Logic ---
     val hasSeenOnboardingFlow: Flow<Boolean> = appContext.dataStore.data.map {
         it[HAS_SEEN_ONBOARDING_KEY] ?: false
     }
@@ -38,6 +43,17 @@ class SettingsDataStore(context: Context) {
     suspend fun saveOnboardingSeen() {
         appContext.dataStore.edit { preferences ->
             preferences[HAS_SEEN_ONBOARDING_KEY] = true
+        }
+    }
+
+    // --- Caller ID Setup Logic ---
+    val hasCompletedFirstSetupFlow: Flow<Boolean> = appContext.dataStore.data.map {
+        it[HAS_COMPLETED_FIRST_SETUP_KEY] ?: false
+    }
+
+    suspend fun saveFirstSetupCompleted() {
+        appContext.dataStore.edit { preferences ->
+            preferences[HAS_COMPLETED_FIRST_SETUP_KEY] = true
         }
     }
 }
