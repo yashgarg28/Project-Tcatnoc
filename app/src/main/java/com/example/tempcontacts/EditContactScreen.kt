@@ -2,10 +2,13 @@ package com.example.tempcontacts
 
 import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContactPhone
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +30,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -33,7 +38,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun EditContactScreen(
     viewModel: ContactViewModel,
-    settingsDataStore: SettingsDataStore, // Added this parameter
+    settingsDataStore: SettingsDataStore,
     contactId: Int,
     onContactUpdated: () -> Unit,
     onBackClick: () -> Unit
@@ -53,7 +58,11 @@ fun EditContactScreen(
     var customDurationLabel by remember { mutableStateOf("Custom") }
 
     var showBottomSheet by remember { mutableStateOf(false) }
-    var showCallerIdGuide by remember { mutableStateOf(false) }
+
+    // New Permission Popup States
+    var showPermissionPopup by remember { mutableStateOf(false) }
+    var missingRole by remember { mutableStateOf(false) }
+    var missingOverlay by remember { mutableStateOf(false) }
 
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -77,7 +86,16 @@ fun EditContactScreen(
     val requestRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        onContactUpdated()
+        // When they return from Role Dialog, check if we can dismiss the popup
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
+            missingRole = !roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+            // If they fixed everything, close the popup and finish
+            if (!missingRole && !missingOverlay) {
+                showPermissionPopup = false
+                scope.launch { settingsDataStore.saveFirstSetupCompleted() }
+                onContactUpdated()
+            }
+        }
     }
 
     LaunchedEffect(contact) {
@@ -237,20 +255,33 @@ fun EditContactScreen(
                             ?: Contact(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
 
                         if (contactId == 0) {
+                            // Saving New Contact
                             viewModel.insert(updatedContact)
                             triggerSuccessFeedback()
 
-                            // Check if this is the very first contact
-                            if (contacts.isEmpty()) {
-                                // Mark setup as completed to prevent double-popup from MainActivity
-                                scope.launch {
-                                    settingsDataStore.saveFirstSetupCompleted()
+                            scope.launch {
+                                // 1. Check if user has already completed setup
+                                val hasDoneSetup = settingsDataStore.hasCompletedFirstSetupFlow.first()
+
+                                // 2. Check Permissions Status
+                                val isRoleHeld = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    (context.getSystemService(Context.ROLE_SERVICE) as RoleManager)
+                                        .isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+                                } else true // Assume true on old versions
+
+                                val isOverlayAllowed = Settings.canDrawOverlays(context)
+
+                                // 3. Logic: If setup NOT done AND (role missing OR overlay missing)
+                                if (!hasDoneSetup && (!isRoleHeld || !isOverlayAllowed)) {
+                                    missingRole = !isRoleHeld
+                                    missingOverlay = !isOverlayAllowed
+                                    showPermissionPopup = true
+                                } else {
+                                    onContactUpdated()
                                 }
-                                showCallerIdGuide = true
-                            } else {
-                                onContactUpdated()
                             }
                         } else {
+                            // Updating Existing Contact
                             viewModel.update(updatedContact)
                             triggerSuccessFeedback()
                             onContactUpdated()
@@ -265,40 +296,80 @@ fun EditContactScreen(
         }
     }
 
-    // --- Caller ID Guide Dialog ---
-    if (showCallerIdGuide) {
+    // --- Smart Permission Popup ---
+    if (showPermissionPopup) {
         AlertDialog(
             onDismissRequest = {
-                showCallerIdGuide = false
+                // If they click outside, just close and finish
+                showPermissionPopup = false
+                scope.launch { settingsDataStore.saveFirstSetupCompleted() }
                 onContactUpdated()
             },
-            icon = { Icon(Icons.Outlined.ContactPhone, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Enable Caller ID?") },
+            icon = { Icon(Icons.Outlined.Security, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Final Step: Enable Caller ID") },
             text = {
                 Text(
-                    "Would you like to identify these contacts when they call? This helps you know who it is without cluttering your permanent phonebook.",
+                    "To identify this burner contact when they call, please enable the following features:",
                     textAlign = TextAlign.Center
                 )
             },
             confirmButton = {
-                Button(onClick = {
-                    showCallerIdGuide = false
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
-                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                        requestRoleLauncher.launch(intent)
-                    } else {
-                        onContactUpdated()
+                Column(modifier = Modifier.fillMaxWidth()) {
+
+                    // Button 1: Role / Service (Only if missing)
+                    if (missingRole) {
+                        Button(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
+                                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                                    requestRoleLauncher.launch(intent)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("1. Enable Identification Service")
+                        }
                     }
-                }) {
-                    Text("Enable")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showCallerIdGuide = false
-                    onContactUpdated()
-                }) {
-                    Text("Maybe Later")
+
+                    // Button 2: Overlay (Only if missing)
+                    if (missingOverlay) {
+                        if (missingRole) Spacer(modifier = Modifier.height(8.dp)) // Spacing if both buttons exist
+
+                        Button(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                try {
+                                    context.startActivity(intent)
+                                    missingOverlay = false // Optimistically update UI
+                                } catch (e: Exception) {
+                                    // Fallback for some devices
+                                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("${if (missingRole) "2. " else ""}Enable Visual Overlay")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // "Maybe Later" Button
+                    TextButton(
+                        onClick = {
+                            showPermissionPopup = false
+                            scope.launch { settingsDataStore.saveFirstSetupCompleted() }
+                            onContactUpdated()
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("I'll do it later")
+                    }
                 }
             }
         )
@@ -328,8 +399,7 @@ fun EditContactScreen(
     }
 }
 
-// CustomDurationPicker code remains the same...
-
+// CustomDurationPicker component
 @Composable
 fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, onCancel: () -> Unit) {
     var days by remember { mutableStateOf(0f) }
