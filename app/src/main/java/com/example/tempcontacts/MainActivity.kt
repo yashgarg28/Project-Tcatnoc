@@ -263,9 +263,14 @@ fun ContactListScreen(
                             Icon(Icons.Default.Close, null)
                         }
                     } else {
-                        IconButton(onClick = { isSearching = true }) {
-                            Icon(Icons.Default.Search, null)
+                        // --- UPDATED LOGIC HERE ---
+                        // Only show the Search icon if there are actually contacts to search through
+                        if (groupedContacts.isNotEmpty()) {
+                            IconButton(onClick = { isSearching = true }) {
+                                Icon(Icons.Default.Search, null)
+                            }
                         }
+
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, null)
                         }
@@ -279,6 +284,7 @@ fun ContactListScreen(
             }
         }
     ) { padding ->
+        // ... rest of your code (Box, EmptyListBranding, LazyColumn) remains exactly the same
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (filteredContacts.isEmpty()) {
                 if (searchQuery.isNotEmpty()) {

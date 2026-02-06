@@ -33,6 +33,28 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +85,7 @@ fun EditContactScreen(
     var showPermissionPopup by remember { mutableStateOf(false) }
     var missingRole by remember { mutableStateOf(false) }
     var missingOverlay by remember { mutableStateOf(false) }
+
 
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -97,6 +120,23 @@ fun EditContactScreen(
             }
         }
     }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                missingOverlay = !Settings.canDrawOverlays(context)
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
 
     LaunchedEffect(contact) {
         contact?.let {
@@ -297,15 +337,18 @@ fun EditContactScreen(
     }
 
     // --- Smart Permission Popup ---
+
+    val isEverythingEnabled = !missingRole && !missingOverlay
     if (showPermissionPopup) {
         AlertDialog(
             onDismissRequest = {
-                // If they click outside, just close and finish
                 showPermissionPopup = false
                 scope.launch { settingsDataStore.saveFirstSetupCompleted() }
                 onContactUpdated()
             },
-            icon = { Icon(Icons.Outlined.Security, null, tint = MaterialTheme.colorScheme.primary) },
+            icon = {
+                Icon(Icons.Outlined.Security, null, tint = MaterialTheme.colorScheme.primary)
+            },
             title = { Text("Final Step: Enable Caller ID") },
             text = {
                 Text(
@@ -316,50 +359,48 @@ fun EditContactScreen(
             confirmButton = {
                 Column(modifier = Modifier.fillMaxWidth()) {
 
-                    // Button 1: Role / Service (Only if missing)
                     if (missingRole) {
                         Button(
                             onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && roleManager != null) {
-                                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                                roleManager?.let {
+                                    val intent =
+                                        it.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
                                     requestRoleLauncher.launch(intent)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("1. Enable Identification Service")
+                            Text("Enable Identification Service")
                         }
                     }
 
-                    // Button 2: Overlay (Only if missing)
                     if (missingOverlay) {
-                        if (missingRole) Spacer(modifier = Modifier.height(8.dp)) // Spacing if both buttons exist
+                        if (missingRole) Spacer(modifier = Modifier.height(8.dp))
 
                         Button(
                             onClick = {
-                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                try {
-                                    context.startActivity(intent)
-                                    missingOverlay = false // Optimistically update UI
-                                } catch (e: Exception) {
-                                    // Fallback for some devices
-                                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                                context.startActivity(intent)
+
+                                // Re-check permission when returning to app
+                                scope.launch {
+                                    // small delay so system applies the change
+                                    kotlinx.coroutines.delay(300)
+                                    missingOverlay = !Settings.canDrawOverlays(context)
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("${if (missingRole) "2. " else ""}Enable Visual Overlay")
+                            Text("Enable Visual Overlay")
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // "Maybe Later" Button
                     TextButton(
                         onClick = {
                             showPermissionPopup = false
@@ -368,12 +409,18 @@ fun EditContactScreen(
                         },
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
-                        Text("I'll do it later")
+                        Text(
+                            if (isEverythingEnabled) "Done" else "I'll do it later"
+                        )
                     }
+
                 }
             }
         )
     }
+
+
+
 
     // --- Bottom Sheet ---
     if (showBottomSheet) {

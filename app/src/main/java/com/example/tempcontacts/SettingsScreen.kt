@@ -172,13 +172,25 @@ fun SettingsScreen(
                             title = "Identification Service",
                             subtitle = if (isCallerIdEnabled) "Service is Active" else "Required to recognize numbers",
                             isChecked = isCallerIdEnabled,
-                            onCheckedChange = {
-                                if (roleManager != null) {
+                            onClick = {
+                                if (roleManager == null) return@PermissionSwitchRow
+
+                                if (!isCallerIdEnabled) {
+                                    // Request Call Screening role
                                     val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
                                     requestRoleLauncher.launch(intent)
+                                } else {
+                                    // Already enabled → open system default apps settings
+                                    val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(intent)
                                 }
                             }
+
+
                         )
+
+
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
@@ -186,25 +198,17 @@ fun SettingsScreen(
                             title = "Display Over Apps",
                             subtitle = if (isOverlayAllowed) "Permission Granted" else "Required for the floating box",
                             isChecked = isOverlayAllowed,
-                            onCheckedChange = {
-                                if (!isOverlayAllowed) {
-                                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    try {
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
-                                    }
-                                } else {
-                                    // Optionally lead them to settings to disable it
-                                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
+                            onClick = {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                ).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
+                                context.startActivity(intent)
                             }
                         )
+
                     }
                 }
             }
@@ -281,30 +285,27 @@ fun PermissionSwitchRow(
     title: String,
     subtitle: String,
     isChecked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
         }
+
         Switch(
             checked = isChecked,
-            onCheckedChange = onCheckedChange,
-            thumbContent = {
-                Icon(
-                    imageVector = if (isChecked) Icons.Outlined.Check else Icons.Outlined.Close,
-                    contentDescription = null,
-                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                )
-            }
+            onCheckedChange = null // ⬅️ IMPORTANT
         )
     }
 }
+
 
 @Composable
 private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit) {
