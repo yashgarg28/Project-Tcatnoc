@@ -53,6 +53,19 @@ import androidx.navigation.navArgument
 import com.example.tempcontacts.ui.theme.TempContactsTheme
 import com.google.firebase.appdistribution.FirebaseAppDistribution
 import com.google.firebase.appdistribution.InterruptionLevel
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+
 
 const val ABOUT_ROUTE = "about_page"
 
@@ -60,7 +73,6 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: ContactViewModel by viewModels()
     private lateinit var settingsDataStore: SettingsDataStore
-
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
@@ -231,6 +243,7 @@ fun ContactListScreen(
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
+    var showWhatsAppDialog by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     val filteredContacts = if (searchQuery.isEmpty()) groupedContacts else {
@@ -279,10 +292,33 @@ fun ContactListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onContactClick(0) }) {
-                Icon(Icons.Default.Add, null)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+
+                // 🔹 WhatsApp FAB (new)
+                FloatingActionButton(
+                    onClick = { showWhatsAppDialog = true },
+                ) {
+                    Icon(
+//                        Icons.Default.ArrowForward,
+//                        painter = painterResource(R.drawable.ic_whatsapp_outline),
+                        painterResource(R.drawable.ic_whatsapp),
+                        contentDescription = "WhatsApp",
+//                        tint = Color.Unspecified
+                    )
+                }
+
+                // 🔹 Add Contact FAB (existing)
+                FloatingActionButton(
+                    onClick = { onContactClick(0) }
+                ) {
+                    Icon(Icons.Default.Add, null)
+                }
             }
         }
+
     ) { padding ->
         // ... rest of your code (Box, EmptyListBranding, LazyColumn) remains exactly the same
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -319,6 +355,12 @@ fun ContactListScreen(
             }
         }
     }
+    if (showWhatsAppDialog) {
+        WhatsAppDialog(
+            onDismiss = { showWhatsAppDialog = false }
+        )
+    }
+
 }
 
 @Composable
@@ -424,4 +466,139 @@ fun ContactCard(contact: Contact, isDarkTheme: Boolean, onClick: () -> Unit) {
             )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WhatsAppDialog(
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    var countryCodeExpanded by remember { mutableStateOf(false) }
+
+    // 🔹 default country (change if needed)
+    var country by remember {
+        mutableStateOf(
+            countryList.first { it.code == "+91" } // India default
+        )
+    }
+    var phone by remember { mutableStateOf("") }
+
+    val isPhoneNumberValid =
+        phone.length == country.phoneLength
+    val phoneLength: Int
+
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Open WhatsApp Chat") },
+        text = {
+            Column {
+
+                Text(
+                    "Enter phone number",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // 🔹 Country Code Picker (same as Add Contact)
+                ExposedDropdownMenuBox(
+                    expanded = countryCodeExpanded,
+                    onExpandedChange = { countryCodeExpanded = !countryCodeExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = "${country.flagEmoji} ${country.code}",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Country") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                expanded = countryCodeExpanded
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = countryCodeExpanded,
+                        onDismissRequest = { countryCodeExpanded = false }
+                    ) {
+                        countryList.forEach { c ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text("${c.flagEmoji} ${c.name} (${c.code})")
+                                },
+                                onClick = {
+                                    country = c
+                                    countryCodeExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // 🔹 Phone number input
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { newValue ->
+                        phone = newValue
+                            .filter { it.isDigit() }
+                            .take(country.phoneLength)
+                    },
+                    label = { Text("Phone") },
+                    isError = phone.isNotEmpty() && !isPhoneNumberValid,
+                    supportingText = {
+                        if (phone.isNotEmpty() && !isPhoneNumberValid) {
+                            Text("Must be ${country.phoneLength} digits")
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = isPhoneNumberValid,
+                onClick = {
+                    val fullNumber =
+                        "${country.code.replace("+", "")}$phone"
+
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("https://wa.me/$fullNumber")
+                    )
+
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "WhatsApp not installed",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    onDismiss()
+                }
+            ) {
+                Text("Open WhatsApp")
+            }
+
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
