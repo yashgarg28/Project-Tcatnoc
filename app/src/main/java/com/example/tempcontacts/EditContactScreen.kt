@@ -73,6 +73,9 @@ fun EditContactScreen(
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var country by remember { mutableStateOf(countryList.find { it.name == "India" } ?: countryList[0]) }
+    val lastCountryCode by settingsDataStore
+        .lastCountryCodeFlow
+        .collectAsState(initial = null)
     var isPhoneNumberValid by remember { mutableStateOf(false) }
 
     var selectedDurationMillis by remember { mutableStateOf<Long?>(null) }
@@ -151,6 +154,16 @@ fun EditContactScreen(
         }
     }
 
+    LaunchedEffect(lastCountryCode, contact) {
+        // Only apply saved country when adding a NEW contact
+        if (contact == null && lastCountryCode != null) {
+            countryList.firstOrNull { it.code == lastCountryCode }?.let {
+                country = it
+            }
+        }
+    }
+
+
     LaunchedEffect(phone, country) {
         isPhoneNumberValid = phone.length == country.phoneLength
     }
@@ -217,6 +230,11 @@ fun EditContactScreen(
                                 onClick = {
                                     country = c
                                     countryCodeExpanded = false
+
+                                    // ✅ Save last selected country
+                                    scope.launch {
+                                        settingsDataStore.saveLastCountryCode(c.code)
+                                    }
                                 }
                             )
                         }
@@ -226,7 +244,9 @@ fun EditContactScreen(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { newValue ->
-                        phone = newValue.filter { it.isDigit() }
+                        phone = newValue
+                            .filter { it.isDigit() }
+                            .take(country.phoneLength)
                     },
                     label = { Text("Phone") },
                     isError = !isPhoneNumberValid,
