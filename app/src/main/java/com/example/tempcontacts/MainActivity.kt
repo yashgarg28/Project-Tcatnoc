@@ -65,7 +65,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-
+import kotlin.collections.firstOrNull
+import kotlinx.coroutines.launch
 
 const val ABOUT_ROUTE = "about_page"
 
@@ -132,6 +133,7 @@ class MainActivity : ComponentActivity() {
                                     ContactListScreen(
                                         viewModel = viewModel,
                                         isDarkTheme = useDarkTheme,
+                                        settingsDataStore = settingsDataStore, // ✅ PASS IT
                                         onContactClick = { contactId ->
                                             if (contactId == 0) navController.navigate("editContact/0")
                                             else navController.navigate("contactDetail/$contactId")
@@ -237,6 +239,7 @@ class MainActivity : ComponentActivity() {
 fun ContactListScreen(
     viewModel: ContactViewModel,
     isDarkTheme: Boolean,
+    settingsDataStore: SettingsDataStore,
     onContactClick: (Int) -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -302,11 +305,9 @@ fun ContactListScreen(
                     onClick = { showWhatsAppDialog = true },
                 ) {
                     Icon(
-//                        Icons.Default.ArrowForward,
-//                        painter = painterResource(R.drawable.ic_whatsapp_outline),
                         painterResource(R.drawable.ic_whatsapp),
                         contentDescription = "WhatsApp",
-//                        tint = Color.Unspecified
+                        tint = Color.Unspecified
                     )
                 }
 
@@ -357,6 +358,7 @@ fun ContactListScreen(
     }
     if (showWhatsAppDialog) {
         WhatsAppDialog(
+            settingsDataStore = settingsDataStore,
             onDismiss = { showWhatsAppDialog = false }
         )
     }
@@ -471,24 +473,37 @@ fun ContactCard(contact: Contact, isDarkTheme: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WhatsAppDialog(
+    settingsDataStore: SettingsDataStore,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var countryCodeExpanded by remember { mutableStateOf(false) }
-
-    // 🔹 default country (change if needed)
-    var country by remember {
-        mutableStateOf(
-            countryList.first { it.code == "+91" } // India default
-        )
-    }
     var phone by remember { mutableStateOf("") }
 
-    val isPhoneNumberValid =
-        phone.length == country.phoneLength
-    val phoneLength: Int
+    // 🌍 Load saved country
+    val savedCountryCode by settingsDataStore
+        .lastCountryCodeFlow
+        .collectAsState(initial = null)
 
+    // 🌍 Selected country (default India)
+    var country by remember {
+        mutableStateOf(
+            countryList.find { it.code == "+91" } ?: countryList.first()
+        )
+    }
+
+    // 🔁 Restore last used country
+    LaunchedEffect(savedCountryCode) {
+        savedCountryCode?.let { code ->
+            countryList.find { it.code == code }?.let {
+                country = it
+            }
+        }
+    }
+
+    val isPhoneNumberValid = phone.length == country.phoneLength
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -496,14 +511,11 @@ fun WhatsAppDialog(
         text = {
             Column {
 
-                Text(
-                    "Enter phone number",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text("Enter phone number")
 
                 Spacer(Modifier.height(8.dp))
 
-                // 🔹 Country Code Picker (same as Add Contact)
+                // 🌍 Country Picker
                 ExposedDropdownMenuBox(
                     expanded = countryCodeExpanded,
                     onExpandedChange = { countryCodeExpanded = !countryCodeExpanded }
@@ -535,6 +547,10 @@ fun WhatsAppDialog(
                                 onClick = {
                                     country = c
                                     countryCodeExpanded = false
+
+                                    scope.launch {
+                                        settingsDataStore.saveLastCountryCode(c.code)
+                                    }
                                 }
                             )
                         }
@@ -543,12 +559,12 @@ fun WhatsAppDialog(
 
                 Spacer(Modifier.height(8.dp))
 
-                // 🔹 Phone number input
+                // 📞 Phone input
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { newValue ->
-                        phone = newValue
-                            .filter { it.isDigit() }
+                    onValueChange = {
+                        phone = it
+                            .filter(Char::isDigit)
                             .take(country.phoneLength)
                     },
                     label = { Text("Phone") },
@@ -593,7 +609,6 @@ fun WhatsAppDialog(
             ) {
                 Text("Open WhatsApp")
             }
-
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

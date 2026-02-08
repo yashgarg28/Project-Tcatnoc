@@ -10,53 +10,69 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-// This creates the single DataStore instance for the app
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+// ✅ Single DataStore instance for the whole app
 
 class SettingsDataStore(context: Context) {
 
-    // Use applicationContext to prevent memory leaks
+    // ✅ Use applicationContext to avoid memory leaks
     private val appContext = context.applicationContext
 
     companion object {
         private val THEME_KEY = stringPreferencesKey("theme")
-        private val HAS_SEEN_ONBOARDING_KEY = booleanPreferencesKey("has_seen_onboarding")
+        private val HAS_SEEN_ONBOARDING_KEY =
+            booleanPreferencesKey("has_seen_onboarding")
+        private val HAS_COMPLETED_FIRST_SETUP_KEY =
+            booleanPreferencesKey("has_completed_first_setup")
 
-        // Tracks if the user has handled the Caller ID/Overlay permission popup
-        private val HAS_COMPLETED_FIRST_SETUP_KEY = booleanPreferencesKey("has_completed_first_setup")
+        private val LAST_COUNTRY_CODE_KEY =
+            stringPreferencesKey("last_country_code")
     }
 
-    // --- Theme Logic ---
-    val themeFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
-        preferences[THEME_KEY] ?: "System"
-    }
+    // 🌗 Theme
+    val themeFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[THEME_KEY] ?: "System"
+        }
 
     suspend fun saveTheme(theme: String) {
-        appContext.dataStore.edit { preferences ->
-            preferences[THEME_KEY] = theme
+        appContext.dataStore.edit { prefs ->
+            prefs[THEME_KEY] = theme
         }
     }
 
-    // --- Onboarding Logic ---
-    val hasSeenOnboardingFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
-        preferences[HAS_SEEN_ONBOARDING_KEY] ?: false
-    }
+    // 🚀 Onboarding
+    val hasSeenOnboardingFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[HAS_SEEN_ONBOARDING_KEY] ?: false
+        }
 
     suspend fun saveOnboardingSeen() {
-        appContext.dataStore.edit { preferences ->
-            preferences[HAS_SEEN_ONBOARDING_KEY] = true
+        appContext.dataStore.edit { prefs ->
+            prefs[HAS_SEEN_ONBOARDING_KEY] = true
         }
     }
 
-    // --- Caller ID Setup Logic (Consolidated) ---
-    // This connects to the popup in EditContactScreen
-    val hasCompletedFirstSetupFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
-        preferences[HAS_COMPLETED_FIRST_SETUP_KEY] ?: false
-    }
+    // 🛂 First setup (Caller ID / Overlay)
+    val hasCompletedFirstSetupFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[HAS_COMPLETED_FIRST_SETUP_KEY] ?: false
+        }
 
     suspend fun saveFirstSetupCompleted() {
-        appContext.dataStore.edit { preferences ->
-            preferences[HAS_COMPLETED_FIRST_SETUP_KEY] = true
+        appContext.dataStore.edit { prefs ->
+            prefs[HAS_COMPLETED_FIRST_SETUP_KEY] = true
+        }
+    }
+
+    // 🌍 Last selected country
+    val lastCountryCodeFlow: Flow<String?> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[LAST_COUNTRY_CODE_KEY]
+        }
+
+    suspend fun saveLastCountryCode(code: String) {
+        appContext.dataStore.edit { prefs ->
+            prefs[LAST_COUNTRY_CODE_KEY] = code
         }
     }
 }
