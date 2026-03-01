@@ -247,8 +247,14 @@ fun ContactListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var showWhatsAppDialog by remember { mutableStateOf(false) }
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val focusRequester = remember { FocusRequester() }
-
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = System.currentTimeMillis()
+            kotlinx.coroutines.delay(60000) // Refresh every 60 seconds
+        }
+    }
     val filteredContacts = if (searchQuery.isEmpty()) groupedContacts else {
         groupedContacts.mapValues { (_, c) ->
             c.filter { it.name.contains(searchQuery, true) || it.phone.contains(searchQuery) }
@@ -345,7 +351,12 @@ fun ContactListScreen(
                             Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
                                 Column {
                                     contacts.forEachIndexed { i, c ->
-                                        ContactCard(c, isDarkTheme) { onContactClick(c.id) }
+                                        ContactCard(
+                                            contact = c,
+                                            isDarkTheme = isDarkTheme,
+                                            currentTime = currentTime,
+                                            onClick = { onContactClick(c.id) }
+                                        )
                                         if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                                     }
                                 }
@@ -431,24 +442,62 @@ fun EmptyListBranding(isDarkTheme: Boolean) {
 }
 
 @Composable
-fun ContactCard(contact: Contact, isDarkTheme: Boolean, onClick: () -> Unit) {
+fun getTimerColor(deletionTimestamp: Long?, currentTime: Long, isDarkTheme: Boolean): Color {
+    if (deletionTimestamp == null) return MaterialTheme.colorScheme.primary
+
+    val remainingMillis = deletionTimestamp - currentTime
+
+    // NEW SCALING:
+    val oneDay = 24 * 60 * 60 * 1000L      // 24 Hours
+    val fiveDays = 5 * oneDay              // 5 Days
+
+    return when {
+        remainingMillis <= 0 -> Color.Gray
+
+        // 🔴 Red if less than 24 hours left
+        remainingMillis < oneDay -> Color(0xFFFF5252)
+
+        // 🟠 Orange if less than 5 days left
+        remainingMillis < fiveDays -> Color(0xFFFFB74D)
+
+        // 🔵/⚪ Brand color if more than 5 days left
+        else -> if (isDarkTheme) Color.White else Color(0xFF2196F3)
+    }
+}
+
+@Composable
+fun ContactCard(
+    contact: Contact,
+    isDarkTheme: Boolean,
+    currentTime: Long, // Passed from the screen's "Heartbeat" timer
+    onClick: () -> Unit
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // --- 1. Circle Avatar ---
         Box(
-            Modifier.size(48.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            Alignment.Center
+            modifier = Modifier
+                .size(48.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = contact.name.first().toString(),
+                text = contact.name.firstOrNull()?.toString() ?: "?",
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // --- 2. Contact Details ---
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = contact.name,
                 style = MaterialTheme.typography.bodyLarge,
@@ -460,11 +509,14 @@ fun ContactCard(contact: Contact, isDarkTheme: Boolean, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        // --- 3. Dynamic Timer Icon ---
         if (contact.deletionTimestamp != null) {
             Icon(
-                painterResource(R.drawable.ic_timer),
-                "Timer",
-                tint = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.primary
+                painter = painterResource(id = R.drawable.ic_timer),
+                contentDescription = "Expiration Timer",
+                // The tint now updates every time 'currentTime' changes
+                tint = getTimerColor(contact.deletionTimestamp, currentTime, isDarkTheme)
             )
         }
     }

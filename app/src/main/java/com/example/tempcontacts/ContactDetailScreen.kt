@@ -55,10 +55,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.delay
 import java.io.File
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.foundation.isSystemInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -204,33 +205,47 @@ fun ContactDetailScreen(
 
 @Composable
 private fun RemainingTime(deletionTimestamp: Long) {
-    var remainingTime by remember { mutableStateOf("") }
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val isDarkTheme = isSystemInDarkTheme()
 
-    LaunchedEffect(deletionTimestamp) {
+    LaunchedEffect(Unit) {
         while (true) {
-            val now = System.currentTimeMillis()
-            val diff = deletionTimestamp - now
-
-            if (diff <= 0) {
-                remainingTime = "Deleting..."
-                break
-            }
-
-            val days = diff / (1000 * 60 * 60 * 24)
-            val hours = (diff / (1000 * 60 * 60)) % 24
-            val minutes = (diff / (1000 * 60)) % 60
-            val seconds = (diff / 1000) % 60
-
-            remainingTime = when {
-                days > 0 -> "Deletes in $days ${if (days == 1L) "day" else "days"}, $hours ${if (hours == 1L) "hour" else "hours"}"
-                hours > 0 -> "Deletes in $hours ${if (hours == 1L) "hour" else "hours"}, $minutes ${if (minutes == 1L) "minute" else "minutes"}"
-                else -> "Deletes in $minutes ${if (minutes == 1L) "minute" else "minutes"}, $seconds ${if (seconds == 1L) "second" else "seconds"}"
-            }
-            delay(1000)
+            currentTime = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
         }
     }
 
-    Text(text = remainingTime, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+    val diff = deletionTimestamp - currentTime
+
+    // NEW SCALING CONSTANTS
+    val oneDay = 24 * 60 * 60 * 1000L
+    val fiveDays = 5 * oneDay
+
+    val textColor = when {
+        diff <= 0 -> Color.Gray
+        diff < oneDay -> Color(0xFFFF5252)   // 🔴 < 24h
+        diff < fiveDays -> Color(0xFFFFB74D) // 🟠 < 5 days
+        else -> if (isDarkTheme) Color.White else Color(0xFF2196F3)
+    }
+
+    val remainingText = if (diff <= 0) "Deleting..." else {
+        val days = diff / oneDay
+        val hours = (diff / (1000 * 60 * 60)) % 24
+        val minutes = (diff / (1000 * 60)) % 60
+
+        when {
+            days > 0 -> "Deletes in $days d, $hours h"
+            hours > 0 -> "Deletes in $hours h, $minutes m"
+            else -> "Deletes in $minutes m" // Switched to minutes for the final stretch
+        }
+    }
+
+    Text(
+        text = remainingText,
+        color = textColor,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Bold
+    )
 }
 
 @Composable
