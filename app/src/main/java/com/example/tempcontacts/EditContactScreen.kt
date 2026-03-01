@@ -73,6 +73,7 @@ fun EditContactScreen(
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var country by remember { mutableStateOf(countryList.find { it.name == "India" } ?: countryList[0]) }
+    var notes by remember { mutableStateOf(contact?.notes ?: "") }
     val lastCountryCode by settingsDataStore
         .lastCountryCodeFlow
         .collectAsState(initial = null)
@@ -257,6 +258,20 @@ fun EditContactScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
 
+            OutlinedTextField(
+                value = notes,
+                onValueChange = { notes = it },
+                label = { Text("Notes (Optional)") },
+                placeholder = { Text("e.g. Delivery for the couch") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp), // Make it taller for notes
+                maxLines = 3,
+                singleLine = false
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
             Text("Auto-Delete Duration", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -311,8 +326,19 @@ fun EditContactScreen(
                     if (name.isNotBlank() && isPhoneNumberValid) {
                         val fullPhoneNumber = "${country.code} $phone"
                         val deletionTimestamp = selectedDurationMillis?.let { System.currentTimeMillis() + it }
-                        val updatedContact = contact?.copy(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
-                            ?: Contact(name = name, phone = fullPhoneNumber, deletionTimestamp = deletionTimestamp)
+
+                        // ✅ Include 'notes' in both the copy (update) and the constructor (new)
+                        val updatedContact = contact?.copy(
+                            name = name,
+                            phone = fullPhoneNumber,
+                            notes = notes, // 👈 Added here
+                            deletionTimestamp = deletionTimestamp
+                        ) ?: Contact(
+                            name = name,
+                            phone = fullPhoneNumber,
+                            notes = notes, // 👈 Added here
+                            deletionTimestamp = deletionTimestamp
+                        )
 
                         if (contactId == 0) {
                             // Saving New Contact
@@ -320,18 +346,15 @@ fun EditContactScreen(
                             triggerSuccessFeedback()
 
                             scope.launch {
-                                // 1. Check if user has already completed setup
                                 val hasDoneSetup = settingsDataStore.hasCompletedFirstSetupFlow.first()
 
-                                // 2. Check Permissions Status
                                 val isRoleHeld = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                     (context.getSystemService(Context.ROLE_SERVICE) as RoleManager)
                                         .isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
-                                } else true // Assume true on old versions
+                                } else true
 
                                 val isOverlayAllowed = Settings.canDrawOverlays(context)
 
-                                // 3. Logic: If setup NOT done AND (role missing OR overlay missing)
                                 if (!hasDoneSetup && (!isRoleHeld || !isOverlayAllowed)) {
                                     missingRole = !isRoleHeld
                                     missingOverlay = !isOverlayAllowed

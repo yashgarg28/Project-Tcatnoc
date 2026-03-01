@@ -15,3 +15,5 @@
 3.6.1 and 17 - Added an overlay and a display over apps settings.
 3.7.1 and 18 - Now search bar is not visible when there are no contacts, settings permission popup has been edited.
                Now both of the settings can be enables and disabled from in-app.
+Added a color changing pattern to the timer and the timer icon.
+Added a notes section in add contact and contact details screen.

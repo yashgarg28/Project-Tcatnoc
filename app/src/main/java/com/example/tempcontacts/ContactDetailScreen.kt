@@ -56,10 +56,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import kotlinx.coroutines.delay
 import java.io.File
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Surface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,6 +148,25 @@ fun ContactDetailScreen(
                 contactDetails.deletionTimestamp?.let { timestamp ->
                     Spacer(modifier = Modifier.height(8.dp))
                     RemainingTime(deletionTimestamp = timestamp)
+                }
+                Spacer(Modifier.height(32.dp))
+
+                // 📝 NEW: Notes Section (Placed right under Time)
+                if (contactDetails.notes.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    ) {
+                        Text(
+                            text = contactDetails.notes,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
                 Spacer(Modifier.height(32.dp))
 
@@ -270,6 +291,14 @@ private fun DetailsCard(contact: Contact) {
             Text("Contact Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(icon = Icons.Default.Call, label = "Phone", value = contact.phone)
+//            if (contact.notes.isNotEmpty()) {
+//                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+//                DetailRow(
+//                    icon = Icons.Default.Edit, // Or a custom "description" icon
+//                    label = "Note",
+//                    value = contact.notes
+//                )
+//            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(painter = painterResource(id = R.drawable.whatsapp_logo), label = "WhatsApp", value = contact.phone, iconSize = 28.dp, onClick = {
                  val intent = Intent(Intent.ACTION_VIEW).apply {

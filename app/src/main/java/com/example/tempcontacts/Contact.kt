@@ -9,5 +9,6 @@ data class Contact(
     val id: Int = 0,
     val name: String,
     val phone: String,
+    val notes: String = "",
     val deletionTimestamp: Long? = null
 )
