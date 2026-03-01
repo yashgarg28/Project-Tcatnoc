@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.ui.text.style.TextOverflow
 import kotlin.collections.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -252,15 +253,15 @@ fun ContactListScreen(
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
-            kotlinx.coroutines.delay(60000) // Refresh every 60 seconds
+            kotlinx.coroutines.delay(60000)
         }
     }
+    // Updated filtering logic including notes
     val filteredContacts = if (searchQuery.isEmpty()) groupedContacts else {
         groupedContacts.mapValues { (_, c) ->
-            c.filter { it.name.contains(searchQuery, true) || it.phone.contains(searchQuery) }
+            c.filter { it.name.contains(searchQuery, true) || it.phone.contains(searchQuery) || it.notes.contains(searchQuery, true) }
         }.filterValues { it.isNotEmpty() }
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -269,84 +270,38 @@ fun ContactListScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search...") },
+                            placeholder = { Text("Search name, phone, or notes...") },
                             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                             singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent
-                            )
+                            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
                         )
                     } else { Text("Contacts") }
                 },
                 actions = {
                     if (isSearching) {
-                        IconButton(onClick = { isSearching = false; searchQuery = "" }) {
-                            Icon(Icons.Default.Close, null)
-                        }
-                    } else {
-                        // --- UPDATED LOGIC HERE ---
-                        // Only show the Search icon if there are actually contacts to search through
-                        if (groupedContacts.isNotEmpty()) {
-                            IconButton(onClick = { isSearching = true }) {
-                                Icon(Icons.Default.Search, null)
-                            }
-                        }
-
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, null)
-                        }
+                        IconButton(onClick = { isSearching = false; searchQuery = "" }) { Icon(Icons.Default.Close, null) }
+                    } else if (groupedContacts.isNotEmpty()) {
+                        IconButton(onClick = { isSearching = true }) { Icon(Icons.Default.Search, null) }
+                        IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, null) }
                     }
                 }
             )
         },
         floatingActionButton = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-
-                // 🔹 WhatsApp FAB (new)
-                FloatingActionButton(
-                    onClick = { showWhatsAppDialog = true },
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_whatsapp),
-                        contentDescription = "WhatsApp",
-                        tint = Color.Unspecified
-                    )
-                }
-
-                // 🔹 Add Contact FAB (existing)
-                FloatingActionButton(
-                    onClick = { onContactClick(0) }
-                ) {
-                    Icon(Icons.Default.Add, null)
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
+                FloatingActionButton(onClick = { showWhatsAppDialog = true }) { Icon(painterResource(R.drawable.ic_whatsapp), "WhatsApp", tint = Color.Unspecified) }
+                FloatingActionButton(onClick = { onContactClick(0) }) { Icon(Icons.Default.Add, null) }
             }
         }
-
     ) { padding ->
-        // ... rest of your code (Box, EmptyListBranding, LazyColumn) remains exactly the same
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (filteredContacts.isEmpty()) {
-                if (searchQuery.isNotEmpty()) {
-                    Text("No results", modifier = Modifier.align(Alignment.Center))
-                } else {
-                    EmptyListBranding(isDarkTheme = isDarkTheme)
-                }
+                if (searchQuery.isNotEmpty()) Text("No results found", modifier = Modifier.align(Alignment.Center))
+                else EmptyListBranding(isDarkTheme)
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     filteredContacts.forEach { (letter, contacts) ->
-                        stickyHeader {
-                            Text(
-                                letter.toString(),
-                                Modifier.fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                                    .padding(16.dp, 8.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        stickyHeader { Text(letter.toString(), Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp, 8.dp), fontWeight = FontWeight.Bold) }
                         item {
                             Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
                                 Column {
@@ -355,6 +310,7 @@ fun ContactListScreen(
                                             contact = c,
                                             isDarkTheme = isDarkTheme,
                                             currentTime = currentTime,
+                                            searchQuery = searchQuery, // ✅ Pass the search query here
                                             onClick = { onContactClick(c.id) }
                                         )
                                         if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
@@ -367,13 +323,7 @@ fun ContactListScreen(
             }
         }
     }
-    if (showWhatsAppDialog) {
-        WhatsAppDialog(
-            settingsDataStore = settingsDataStore,
-            onDismiss = { showWhatsAppDialog = false }
-        )
-    }
-
+    if (showWhatsAppDialog) WhatsAppDialog(settingsDataStore) { showWhatsAppDialog = false }
 }
 
 @Composable
@@ -469,7 +419,8 @@ fun getTimerColor(deletionTimestamp: Long?, currentTime: Long, isDarkTheme: Bool
 fun ContactCard(
     contact: Contact,
     isDarkTheme: Boolean,
-    currentTime: Long, // Passed from the screen's "Heartbeat" timer
+    currentTime: Long,
+    searchQuery: String,
     onClick: () -> Unit
 ) {
     Row(
@@ -503,6 +454,30 @@ fun ContactCard(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold
             )
+
+            // ✅ Match logic: Is searching AND note contains query?
+            val isMatchInNote = searchQuery.isNotBlank() &&
+                    contact.notes.contains(searchQuery, ignoreCase = true)
+
+            if (isMatchInNote) {
+                Spacer(modifier = Modifier.height(4.dp))
+                // 📦 The Note Box (Styled like the Detail Screen)
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(4.dp), // Slightly smaller corner for the list
+                ) {
+                    Text(
+                        text = contact.notes,
+                        style = MaterialTheme.typography.labelSmall, // Smaller text for the list
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
             Text(
                 text = contact.phone,
                 style = MaterialTheme.typography.bodyMedium,
@@ -515,7 +490,6 @@ fun ContactCard(
             Icon(
                 painter = painterResource(id = R.drawable.ic_timer),
                 contentDescription = "Expiration Timer",
-                // The tint now updates every time 'currentTime' changes
                 tint = getTimerColor(contact.deletionTimestamp, currentTime, isDarkTheme)
             )
         }

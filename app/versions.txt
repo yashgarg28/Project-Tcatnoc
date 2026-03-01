@@ -17,3 +17,4 @@
                Now both of the settings can be enables and disabled from in-app.
 Added a color changing pattern to the timer and the timer icon.
 Added a notes section in add contact and contact details screen.
+Added search using Notes.
