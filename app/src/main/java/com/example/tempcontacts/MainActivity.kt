@@ -68,7 +68,10 @@ import android.widget.Toast
 import androidx.compose.ui.text.style.TextOverflow
 import kotlin.collections.firstOrNull
 import kotlinx.coroutines.launch
-
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.PaddingValues
 const val ABOUT_ROUTE = "about_page"
 
 class MainActivity : ComponentActivity() {
@@ -244,24 +247,44 @@ fun ContactListScreen(
     onContactClick: (Int) -> Unit,
     onSettingsClick: () -> Unit
 ) {
+    // --- 1. States ---
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var showWhatsAppDialog by remember { mutableStateOf(false) }
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    // Tag Logic
+    var selectedFilterTag by remember { mutableStateOf("All") }
+    val databaseTags by viewModel.allExistingTags.collectAsState()
+    val filterOptions = remember(databaseTags) {
+        listOf("All") + (listOf("Work", "Delivery", "Social", "Personal") + databaseTags).distinct()
+    }
+
     val focusRequester = remember { FocusRequester() }
+
+    // --- 2. Live Timer Logic ---
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
             kotlinx.coroutines.delay(60000)
         }
     }
-    // Updated filtering logic including notes
-    val filteredContacts = if (searchQuery.isEmpty()) groupedContacts else {
-        groupedContacts.mapValues { (_, c) ->
-            c.filter { it.name.contains(searchQuery, true) || it.phone.contains(searchQuery) || it.notes.contains(searchQuery, true) }
-        }.filterValues { it.isNotEmpty() }
-    }
+
+    // --- 3. Filtering Logic (Handles Search + Tag) ---
+    val filteredContacts = groupedContacts.mapValues { (_, contacts) ->
+        contacts.filter { contact ->
+            val matchesSearch = searchQuery.isEmpty() ||
+                    contact.name.contains(searchQuery, true) ||
+                    contact.phone.contains(searchQuery) ||
+                    contact.notes.contains(searchQuery, true)
+
+            val matchesTag = selectedFilterTag == "All" || contact.tag == selectedFilterTag
+
+            matchesSearch && matchesTag
+        }
+    }.filterValues { it.isNotEmpty() }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -270,28 +293,27 @@ fun ContactListScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search name, phone, or notes...") },
+                            placeholder = { Text("Search...") },
                             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                             singleLine = true,
-                            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent
+                            )
                         )
                     } else { Text("Contacts") }
                 },
                 actions = {
                     if (isSearching) {
-                        // Show Close icon when searching
                         IconButton(onClick = { isSearching = false; searchQuery = "" }) {
                             Icon(Icons.Default.Close, null)
                         }
                     } else {
-                        // 1. Show Search only if there are contacts to search
                         if (groupedContacts.isNotEmpty()) {
                             IconButton(onClick = { isSearching = true }) {
                                 Icon(Icons.Default.Search, null)
                             }
                         }
-
-                        // 2. ALWAYS show Settings (Moved outside the 'ifNotEmpty' check)
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, null)
                         }
@@ -301,31 +323,98 @@ fun ContactListScreen(
         },
         floatingActionButton = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
-                FloatingActionButton(onClick = { showWhatsAppDialog = true }) { Icon(painterResource(R.drawable.ic_whatsapp), "WhatsApp", tint = Color.Unspecified) }
-                FloatingActionButton(onClick = { onContactClick(0) }) { Icon(Icons.Default.Add, null) }
+                FloatingActionButton(onClick = { showWhatsAppDialog = true }) {
+                    Icon(painterResource(R.drawable.ic_whatsapp), "WhatsApp", tint = Color.Unspecified)
+                }
+                FloatingActionButton(onClick = { onContactClick(0) }) {
+                    Icon(Icons.Default.Add, null)
+                }
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (filteredContacts.isEmpty()) {
-                if (searchQuery.isNotEmpty()) Text("No results found", modifier = Modifier.align(Alignment.Center))
-                else EmptyListBranding(isDarkTheme)
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    filteredContacts.forEach { (letter, contacts) ->
-                        stickyHeader { Text(letter.toString(), Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp, 8.dp), fontWeight = FontWeight.Bold) }
-                        item {
-                            Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
-                                Column {
-                                    contacts.forEachIndexed { i, c ->
-                                        ContactCard(
-                                            contact = c,
-                                            isDarkTheme = isDarkTheme,
-                                            currentTime = currentTime,
-                                            searchQuery = searchQuery, // ✅ Pass the search query here
-                                            onClick = { onContactClick(c.id) }
-                                        )
-                                        if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+
+            // ✅ THE FILTER BAR
+            if (groupedContacts.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filterOptions) { tag ->
+                        val isSelected = selectedFilterTag == tag
+
+                        // Call helper inside the loop to fix 'Unresolved reference' errors
+                        val tagAttrs = if (tag != "All") getTagAttributes(tag) else null
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedFilterTag = tag },
+                            label = { Text(tag) },
+                            leadingIcon = if (tagAttrs != null) {
+                                {
+                                    Icon(
+                                        imageVector = tagAttrs.third, // The icon
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else tagAttrs.second
+                                    )
+                                }
+                            } else null,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+            }
+
+            // --- Contact List Content ---
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                if (filteredContacts.isEmpty()) {
+                    // Logic to show "No Results" or "Empty Branding"
+                    if (searchQuery.isNotEmpty() || selectedFilterTag != "All") {
+                        // Dead center of the remaining screen
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\""
+                                else "No contacts tagged as '$selectedFilterTag'",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(32.dp)
+                            )
+                        }
+                    } else {
+                        // Shows your logo branding when the whole app is empty
+                        EmptyListBranding(isDarkTheme)
+                    }
+                } else {
+                    // Your existing LazyColumn logic
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        filteredContacts.forEach { (letter, contacts) ->
+                            stickyHeader {
+                                Text(
+                                    letter.toString(),
+                                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp, 8.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            item {
+                                Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
+                                    Column {
+                                        contacts.forEachIndexed { i, c ->
+                                            ContactCard(
+                                                contact = c,
+                                                isDarkTheme = isDarkTheme,
+                                                currentTime = currentTime,
+                                                searchQuery = searchQuery,
+                                                onClick = { onContactClick(c.id) }
+                                            )
+                                            if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                                        }
                                     }
                                 }
                             }

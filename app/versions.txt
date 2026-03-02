@@ -29,3 +29,4 @@
                Updated contact database version to 3
                Added a new TagUtil.kt file for styling the tags
                Added Tags to the contact
+               Added filters for the tags
