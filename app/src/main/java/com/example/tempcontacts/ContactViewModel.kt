@@ -21,9 +21,24 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
     val allContacts: StateFlow<List<Contact>> = contactDao.getAllContacts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allExistingTags: StateFlow<List<String>> = contactDao.getAllContacts()
+        .map { contactList ->
+            contactList.map { it.tag }
+                .filter { it != "None" && it.isNotBlank() }
+                .distinct()
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // ✅ IMPROVED: Added a check for empty names to prevent 'first()' crashes
     val groupedContacts: StateFlow<Map<Char, List<Contact>>> = contactDao.getAllContacts()
         .map { contacts ->
-            contacts.groupBy { it.name.first().uppercaseChar() }.toSortedMap()
+            contacts.groupBy {
+                it.name.firstOrNull()?.uppercaseChar() ?: '?'
+            }.toSortedMap()
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 

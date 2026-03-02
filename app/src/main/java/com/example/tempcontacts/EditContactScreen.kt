@@ -74,13 +74,10 @@ fun EditContactScreen(
     val contacts by viewModel.allContacts.collectAsState()
     val contact = contacts.find { it.id == contactId }
     data class ContactTag(val name: String, val color: Color)
-    val predefinedTags = listOf(
-        ContactTag("None", Color.Gray),
-        ContactTag("Work", Color(0xFF2196F3)),      // Blue
-        ContactTag("Delivery", Color(0xFFFF9800)),  // Orange
-        ContactTag("Social", Color(0xFFE91E63)),    // Pink
-        ContactTag("Personal", Color(0xFF4CAF50))   // Green
-    )
+    val databaseTags by viewModel.allExistingTags.collectAsState()
+    val predefinedTags = listOf("Work", "Delivery", "Social", "Personal")
+    val displayTags = (predefinedTags + databaseTags).distinct()
+
 
     var selectedTag by remember { mutableStateOf(contact?.tag ?: "None") }
     var showCustomTagDialog by remember { mutableStateOf(false) }
@@ -291,7 +288,7 @@ fun EditContactScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(
+            Text(                                   // Tags
                 text = "Category",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 16.dp)
@@ -301,12 +298,12 @@ fun EditContactScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
-                // 1. Show your predefined tags
-                items(items = tags) { tag: String ->
+                // ✅ Use displayTags here!
+                items(items = displayTags) { tag ->
                     FilterChip(
                         selected = (selectedTag == tag),
                         onClick = { selectedTag = tag },
-                        label = { Text(text = tag) },
+                        label = { Text(tag) },
                         shape = RoundedCornerShape(12.dp)
                     )
                 }
