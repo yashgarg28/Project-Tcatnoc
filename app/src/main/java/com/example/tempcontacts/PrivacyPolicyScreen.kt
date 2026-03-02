@@ -46,17 +46,19 @@ fun PrivacyPolicyScreen(onBackClick: () -> Unit) {
 
             Text(
                 text = """
-                    1. Data Storage: All contact information created in Burner Book is stored locally on your device's internal storage. 
-                    
-                    2. Caller ID & Call Screening: To provide Caller ID notifications, the app identifies incoming phone numbers by comparing them against your local Burner Book database. This process happens entirely on your device. We never log your call history or share your call data.
-                    
-                    3. Data Transmission: This app does not have internet permissions and cannot upload your data or call information to any servers.
-                    
-                    4. Third Parties: No data is shared with third-party services or advertisers.
-                    
-                    5. Permissions: We request Notification permissions for deletion alerts, and Phone/Call Log permissions specifically to enable the Caller ID identification feature.
-                    
-                    6. Deletion: Once a contact's timer expires, the data is permanently erased.
+1.Data Storage: All contact information—including names, phone numbers, and personal notes—created in Burner Book is stored locally on your device's internal storage.
+
+2.Caller ID & Call Screening: To provide Caller ID notifications, the app identifies incoming phone numbers by comparing them against your local Burner Book database. This process happens entirely on your device. We never log your call history or share your call data.
+
+3.Data Transmission: This app does not have internet permissions and cannot upload your data, notes, or call information to any servers.
+
+4.User-Initiated Sharing: You may choose to share contact information via the vCard export feature. This generates a temporary file for the system share sheet. This data is only transmitted to the specific destination (e.g., another app) that you manually select.
+
+5.Third Parties: No data is shared with third-party services or advertisers.
+
+6.Permissions: We request Notification permissions for deletion alerts, and Phone/Call Log permissions specifically to enable the Caller ID identification feature.
+
+7.Deletion: Once a contact's timer expires, all associated data, including stored notes, is permanently erased.
                 """.trimIndent(),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Justify

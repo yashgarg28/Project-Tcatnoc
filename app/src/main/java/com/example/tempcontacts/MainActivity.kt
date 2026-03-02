@@ -279,10 +279,22 @@ fun ContactListScreen(
                 },
                 actions = {
                     if (isSearching) {
-                        IconButton(onClick = { isSearching = false; searchQuery = "" }) { Icon(Icons.Default.Close, null) }
-                    } else if (groupedContacts.isNotEmpty()) {
-                        IconButton(onClick = { isSearching = true }) { Icon(Icons.Default.Search, null) }
-                        IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, null) }
+                        // Show Close icon when searching
+                        IconButton(onClick = { isSearching = false; searchQuery = "" }) {
+                            Icon(Icons.Default.Close, null)
+                        }
+                    } else {
+                        // 1. Show Search only if there are contacts to search
+                        if (groupedContacts.isNotEmpty()) {
+                            IconButton(onClick = { isSearching = true }) {
+                                Icon(Icons.Default.Search, null)
+                            }
+                        }
+
+                        // 2. ALWAYS show Settings (Moved outside the 'ifNotEmpty' check)
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(Icons.Default.Settings, null)
+                        }
                     }
                 }
             )
@@ -370,21 +382,30 @@ fun EmptyListBranding(isDarkTheme: Boolean) {
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(bottom = 100.dp, end = 32.dp)) {
+    Box(modifier = Modifier.fillMaxSize().padding(bottom = 90.dp, end = 90.dp)) { // Increased end padding to clear FABs
         Row(
             Modifier.align(Alignment.BottomEnd).graphicsLayer(alpha = alpha),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Start by adding a contact",
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-                color = brandColor.copy(alpha = 0.8f)
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "Start by adding a contact",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
+                    color = brandColor.copy(alpha = 0.8f)
+                )
+                Text(
+                    text = "or message on WhatsApp",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                    color = brandColor.copy(alpha = 0.6f)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 Icons.Default.ArrowForward,
                 null,
-                modifier = Modifier.size(40.dp).rotate(45f),
+                modifier = Modifier.size(32.dp), // Removed the 45f rotation so it points right
                 tint = brandColor
             )
         }
