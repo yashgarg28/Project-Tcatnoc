@@ -22,7 +22,10 @@
                Added a notes section in add contact and contact details screen.
                Added search using Notes.
 
-4.3.1 and 21 - Fixed a bug where settings button was not visible when there were
+5.1.1 and 21 - Fixed a bug where settings button was not visible when there were
                no contacts.
                Updated privacy policy
                Fixed a bug where the Whatsapp button was overlapping a text
+               Updated contact database version to 3
+               Added a new TagUtil.kt file for styling the tags
+               Added Tags to the contact

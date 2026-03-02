@@ -62,7 +62,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Surface
-
+import androidx.compose.foundation.layout.width
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactDetailScreen(
@@ -125,6 +125,7 @@ fun ContactDetailScreen(
         ) {
             contact?.let { contactDetails ->
                 Spacer(modifier = Modifier.height(16.dp))
+                // Icon
                 Box(
                     modifier = Modifier
                         .size(128.dp)
@@ -140,18 +141,52 @@ fun ContactDetailScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Name
                 Text(
                     text = contactDetails.name,
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold
                 )
+
+                // Time Remaining
                 contactDetails.deletionTimestamp?.let { timestamp ->
                     Spacer(modifier = Modifier.height(8.dp))
                     RemainingTime(deletionTimestamp = timestamp)
                 }
-                Spacer(Modifier.height(32.dp))
 
-                // 📝 NEW: Notes Section (Placed right under Time)
+                // ✅ Display Tag Badge in Detail Screen
+                if (contact.tag != "None") {
+                    val (bgColor, contentColor, icon) = getTagAttributes(contact.tag)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        color = bgColor,
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.height(32.dp) // Larger height for detail screen
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = contentColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = contact.tag,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = contentColor,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+
+                //Notes Section
                 if (contactDetails.notes.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
@@ -170,6 +205,7 @@ fun ContactDetailScreen(
                 }
                 Spacer(Modifier.height(32.dp))
 
+                // Call and Text Buttons
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     ActionButton(icon = Icons.Default.Call, label = "Call") { 
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${contactDetails.phone}"))

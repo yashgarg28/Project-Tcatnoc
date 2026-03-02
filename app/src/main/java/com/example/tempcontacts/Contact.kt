@@ -10,5 +10,6 @@ data class Contact(
     val name: String,
     val phone: String,
     val notes: String = "",
+    val tag: String = "None",
     val deletionTimestamp: Long? = null
 )

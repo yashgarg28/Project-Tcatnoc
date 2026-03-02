@@ -43,17 +43,22 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-
-
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +73,18 @@ fun EditContactScreen(
     val context = LocalContext.current
     val contacts by viewModel.allContacts.collectAsState()
     val contact = contacts.find { it.id == contactId }
+    data class ContactTag(val name: String, val color: Color)
+    val predefinedTags = listOf(
+        ContactTag("None", Color.Gray),
+        ContactTag("Work", Color(0xFF2196F3)),      // Blue
+        ContactTag("Delivery", Color(0xFFFF9800)),  // Orange
+        ContactTag("Social", Color(0xFFE91E63)),    // Pink
+        ContactTag("Personal", Color(0xFF4CAF50))   // Green
+    )
+
+    var selectedTag by remember { mutableStateOf(contact?.tag ?: "None") }
+    var showCustomTagDialog by remember { mutableStateOf(false) }
+    var customTagInput by remember { mutableStateOf("") }
 
     // --- State Management ---
     var name by remember { mutableStateOf("") }
@@ -84,6 +101,8 @@ fun EditContactScreen(
     var customDurationLabel by remember { mutableStateOf("Custom") }
 
     var showBottomSheet by remember { mutableStateOf(false) }
+
+    val tags = listOf("None", "Work", "Delivery", "Social", "Personal")
 
     // New Permission Popup States
     var showPermissionPopup by remember { mutableStateOf(false) }
@@ -198,7 +217,7 @@ fun EditContactScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            OutlinedTextField(
+            OutlinedTextField(          // Name
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
@@ -209,7 +228,7 @@ fun EditContactScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ExposedDropdownMenuBox(
+                ExposedDropdownMenuBox(      // Country Code
                     expanded = countryCodeExpanded,
                     onExpandedChange = { countryCodeExpanded = !countryCodeExpanded },
                     modifier = Modifier.weight(0.4f)
@@ -242,7 +261,7 @@ fun EditContactScreen(
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
+                OutlinedTextField(                          // Phone Number
                     value = phone,
                     onValueChange = { newValue ->
                         phone = newValue
@@ -258,7 +277,7 @@ fun EditContactScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
 
-            OutlinedTextField(
+            OutlinedTextField(                      // Notes
                 value = notes,
                 onValueChange = { notes = it },
                 label = { Text("Notes (Optional)") },
@@ -272,7 +291,71 @@ fun EditContactScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text("Auto-Delete Duration", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Category",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            ) {
+                // 1. Show your predefined tags
+                items(items = tags) { tag: String ->
+                    FilterChip(
+                        selected = (selectedTag == tag),
+                        onClick = { selectedTag = tag },
+                        label = { Text(text = tag) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // 2. ✅ MISSING: The "Custom" Chip
+                item {
+                    val isCustomActive = !tags.contains(selectedTag) && selectedTag != "None"
+                    FilterChip(
+                        selected = isCustomActive,
+                        onClick = { showCustomTagDialog = true },
+                        label = {
+                            Text(text = if (isCustomActive) selectedTag else "+ Custom")
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
+                // 3. ✅ MISSING: The Input Dialog
+            if (showCustomTagDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCustomTagDialog = false },
+                    title = { Text("Add Custom Category") },
+                    text = {
+                        OutlinedTextField(
+                            value = customTagInput,
+                            onValueChange = { customTagInput = it },
+                            label = { Text("Tag Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            if (customTagInput.isNotBlank()) {
+                                selectedTag = customTagInput // Set the selection to the new text
+                                showCustomTagDialog = false
+                                customTagInput = "" // Clear for next time
+                            }
+                        }) { Text("Confirm") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCustomTagDialog = false }) { Text("Cancel") }
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text("Auto-Delete Duration", style = MaterialTheme.typography.titleMedium)  // Auto delete
             Spacer(modifier = Modifier.height(8.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -331,12 +414,14 @@ fun EditContactScreen(
                         val updatedContact = contact?.copy(
                             name = name,
                             phone = fullPhoneNumber,
-                            notes = notes, // 👈 Added here
+                            notes = notes,
+                            tag = selectedTag,
                             deletionTimestamp = deletionTimestamp
                         ) ?: Contact(
                             name = name,
                             phone = fullPhoneNumber,
-                            notes = notes, // 👈 Added here
+                            notes = notes,
+                            tag = selectedTag,
                             deletionTimestamp = deletionTimestamp
                         )
 

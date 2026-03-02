@@ -470,40 +470,71 @@ fun ContactCard(
 
         // --- 2. Contact Details ---
         Column(modifier = Modifier.weight(1f)) {
+            // Name stays at the top
             Text(
                 text = contact.name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold
             )
 
-            // ✅ Match logic: Is searching AND note contains query?
+            // Phone number follows
+            Text(
+                text = contact.phone,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // ✅ Tag Badge moved here (Below Phone Number)
+            if (contact.tag != "None") {
+                val (bgColor, contentColor, icon) = getTagAttributes(contact.tag)
+                Spacer(modifier = Modifier.height(6.dp)) // Vertical gap
+                Surface(
+                    color = bgColor,
+                    shape = RoundedCornerShape(12.dp), // Slightly more subtle curve
+                    modifier = Modifier.height(22.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = contentColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = contact.tag,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = contentColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+
+            // --- Match logic: Search query in Notes ---
             val isMatchInNote = searchQuery.isNotBlank() &&
                     contact.notes.contains(searchQuery, ignoreCase = true)
 
             if (isMatchInNote) {
-                Spacer(modifier = Modifier.height(4.dp))
-                // 📦 The Note Box (Styled like the Detail Screen)
+                Spacer(modifier = Modifier.height(6.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(4.dp), // Slightly smaller corner for the list
+                    shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
                         text = contact.notes,
-                        style = MaterialTheme.typography.labelSmall, // Smaller text for the list
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
             }
-
-            Text(
-                text = contact.phone,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         // --- 3. Dynamic Timer Icon ---
