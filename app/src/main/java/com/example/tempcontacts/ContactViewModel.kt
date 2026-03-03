@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +34,6 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
             initialValue = emptyList()
         )
 
-    // ✅ IMPROVED: Added a check for empty names to prevent 'first()' crashes
     val groupedContacts: StateFlow<Map<Char, List<Contact>>> = contactDao.getAllContacts()
         .map { contacts ->
             contacts.groupBy {
@@ -81,38 +81,65 @@ class ContactViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // --- NEW LOGIC START ---
+
     private fun scheduleDeletion(contact: Contact) {
-        val intent = Intent(getApplication(), DeleteContactReceiver::class.java).apply {
-            putExtra("contact_id", contact.id)
+        val expiry = contact.deletionTimestamp ?: return
+        val currentTime = System.currentTimeMillis()
+        val oneDayMillis = 24 * 60 * 60 * 1000L
+        val sevenDaysMillis = 7 * oneDayMillis
+
+        // 1. Schedule Final Deletion
+        setAlarm(contact, expiry, "ACTION_DELETE", 0)
+
+        // 2. Schedule 24-Hour Warning (if time permits)
+        if (expiry - currentTime > oneDayMillis) {
+            setAlarm(contact, expiry - oneDayMillis, "ACTION_WARN_24H", 100000)
         }
-        val pendingIntent = PendingIntent.getBroadcast(
-            getApplication(),
-            contact.id,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        contact.deletionTimestamp?.let {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                it,
-                pendingIntent
-            )
+
+        // 3. Schedule 7-Day Warning (if time permits)
+        if (expiry - currentTime > sevenDaysMillis) {
+            setAlarm(contact, expiry - sevenDaysMillis, "ACTION_WARN_7D", 200000)
         }
     }
 
-    private fun cancelDeletion(contact: Contact) {
+    private fun setAlarm(contact: Contact, triggerAt: Long, action: String, offset: Int) {
         val intent = Intent(getApplication(), DeleteContactReceiver::class.java).apply {
-            putExtra(
-                "contact_id",
-                contact.id
-            )
+            this.action = action
+            putExtra("contact_id", contact.id)
+            putExtra("notification_action", action)
         }
+        // unique code = contact.id + offset ensures no collisions
         val pendingIntent = PendingIntent.getBroadcast(
             getApplication(),
-            contact.id,
+            contact.id + offset,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        alarmManager.cancel(pendingIntent)
+
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAt,
+            pendingIntent
+        )
+    }
+
+    private fun cancelDeletion(contact: Contact) {
+        // Cancel all three potential alarms
+        val actions = listOf(0 to "ACTION_DELETE", 100000 to "ACTION_WARN_24H", 200000 to "ACTION_WARN_7D")
+
+        actions.forEach { (offset, action) ->
+            val intent = Intent(getApplication(), DeleteContactReceiver::class.java).apply {
+                putExtra("contact_id", contact.id)
+                putExtra("notification_action", action)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                getApplication(),
+                contact.id + offset,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+        }
     }
 }
