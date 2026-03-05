@@ -1,9 +1,12 @@
 package com.example.tempcontacts
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +28,10 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,11 +70,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.width
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactDetailScreen(
     viewModel: ContactViewModel,
     contactId: Int,
+    isDarkTheme: Boolean = false,
     onBackClick: () -> Unit,
     onEditClick: () -> Unit,
 ) {
@@ -75,6 +84,30 @@ fun ContactDetailScreen(
     val contact = contacts.find { it.id == contactId }
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var pendingContact by remember { mutableStateOf<Contact?>(null) }
+
+    // ✅ NEW - Permission request launcher for multiple contacts permissions
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val readGranted = permissions[Manifest.permission.READ_CONTACTS] ?: false
+        val writeGranted = permissions[Manifest.permission.WRITE_CONTACTS] ?: false
+
+        if (readGranted && writeGranted) {
+            // ✅ Both permissions granted - proceed with export
+            pendingContact?.let {
+                ContactExporter.performExport(context, it)
+                pendingContact = null
+            }
+        } else {
+            // ❌ User denied permissions
+            Toast.makeText(
+                context,
+                "Contact permissions required to save contact to phone book",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -109,6 +142,7 @@ fun ContactDetailScreen(
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }
+
                     IconButton(onClick = onEditClick) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit")
                     }
@@ -152,7 +186,7 @@ fun ContactDetailScreen(
                 // Time Remaining
                 contactDetails.deletionTimestamp?.let { timestamp ->
                     Spacer(modifier = Modifier.height(8.dp))
-                    RemainingTime(deletionTimestamp = timestamp)
+                    RemainingTime(deletionTimestamp = timestamp, isDarkTheme = isDarkTheme)
                 }
 
                 // ✅ Display Tag Badge in Detail Screen
@@ -163,7 +197,7 @@ fun ContactDetailScreen(
                     Surface(
                         color = bgColor,
                         shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.height(32.dp) // Larger height for detail screen
+                        modifier = Modifier.height(32.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -186,7 +220,7 @@ fun ContactDetailScreen(
                     }
                 }
 
-                //Notes Section
+                //Notes
                 if (contactDetails.notes.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
@@ -203,24 +237,58 @@ fun ContactDetailScreen(
                         )
                     }
                 }
-                Spacer(Modifier.height(32.dp))
 
                 // Call and Text Buttons
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ActionButton(icon = Icons.Default.Call, label = "Call") { 
+                    ActionButton(icon = Icons.Default.Call, label = "Call") {
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${contactDetails.phone}"))
                         context.startActivity(intent)
                     }
-                    ActionButton(icon = Icons.Default.Message, label = "Text") { 
+                    ActionButton(icon = Icons.Default.Message, label = "Text") {
                         val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${contactDetails.phone}"))
                         context.startActivity(intent)
-                     }
+                    }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
 
                 DetailsCard(contact = contactDetails)
 
+                Spacer(modifier = Modifier.height(16.dp))
+                AdditionalInfoCard(contact = contactDetails)
+
                 Spacer(Modifier.weight(1f))
+
+                // ✅ SAVE FOREVER BUTTON - With permission handling
+                Button(
+                    onClick = {
+                        contact?.let {
+                            // Check if permissions are already granted
+                            if (ContactExporter.hasContactsPermissions(context)) {
+                                // Permissions granted, proceed directly
+                                ContactExporter.performExport(context, it)
+                            } else {
+                                // Permissions not granted, store contact and request permissions
+                                pendingContact = it
+                                contactsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.READ_CONTACTS,
+                                        Manifest.permission.WRITE_CONTACTS
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save Forever",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Save Forever")
+                }
 
                 Button(
                     onClick = { showDeleteDialog = true },
@@ -261,9 +329,8 @@ fun ContactDetailScreen(
 }
 
 @Composable
-private fun RemainingTime(deletionTimestamp: Long) {
+private fun RemainingTime(deletionTimestamp: Long, isDarkTheme: Boolean = false) {
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val isDarkTheme = isSystemInDarkTheme()
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -274,14 +341,13 @@ private fun RemainingTime(deletionTimestamp: Long) {
 
     val diff = deletionTimestamp - currentTime
 
-    // NEW SCALING CONSTANTS
     val oneDay = 24 * 60 * 60 * 1000L
     val fiveDays = 5 * oneDay
 
     val textColor = when {
         diff <= 0 -> Color.Gray
-        diff < oneDay -> Color(0xFFFF5252)   // 🔴 < 24h
-        diff < fiveDays -> Color(0xFFFFB74D) // 🟠 < 5 days
+        diff < oneDay -> Color(0xFFFF5252)
+        diff < fiveDays -> Color(0xFFFFB74D)
         else -> if (isDarkTheme) Color.White else Color(0xFF2196F3)
     }
 
@@ -293,7 +359,7 @@ private fun RemainingTime(deletionTimestamp: Long) {
         when {
             days > 0 -> "Deletes in $days d, $hours h"
             hours > 0 -> "Deletes in $hours h, $minutes m"
-            else -> "Deletes in $minutes m" // Switched to minutes for the final stretch
+            else -> "Deletes in $minutes m"
         }
     }
 
@@ -327,17 +393,9 @@ private fun DetailsCard(contact: Contact) {
             Text("Contact Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(icon = Icons.Default.Call, label = "Phone", value = contact.phone)
-//            if (contact.notes.isNotEmpty()) {
-//                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-//                DetailRow(
-//                    icon = Icons.Default.Edit, // Or a custom "description" icon
-//                    label = "Note",
-//                    value = contact.notes
-//                )
-//            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(painter = painterResource(id = R.drawable.whatsapp_logo), label = "WhatsApp", value = contact.phone, iconSize = 28.dp, onClick = {
-                 val intent = Intent(Intent.ACTION_VIEW).apply {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
                     data = Uri.parse("https://api.whatsapp.com/send?phone=${contact.phone}")
                     setPackage("com.whatsapp")
                 }
@@ -362,16 +420,101 @@ private fun DetailsCard(contact: Contact) {
 }
 
 @Composable
+private fun AdditionalInfoCard(contact: Contact) {
+    val context = LocalContext.current
+
+    if (contact.email.isBlank() && contact.address.isBlank() && contact.website.isBlank()) {
+        return
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "Additional Information",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            if (contact.email.isNotBlank()) {
+                DetailRow(
+                    icon = Icons.Outlined.Email,
+                    label = "Email",
+                    value = contact.email,
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:${contact.email}")
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Email app not found", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            if (contact.address.isNotBlank()) {
+                DetailRow(
+                    icon = Icons.Outlined.LocationOn,
+                    label = "Address",
+                    value = contact.address,
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = Uri.parse("geo:0,0?q=${Uri.encode(contact.address)}")
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Maps app not found", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            if (contact.website.isNotBlank()) {
+                DetailRow(
+                    icon = Icons.Outlined.Language,
+                    label = "Website",
+                    value = contact.website,
+                    onClick = {
+                        val url = if (contact.website.startsWith("http")) {
+                            contact.website
+                        } else {
+                            "https://${contact.website}"
+                        }
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = Uri.parse(url)
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Browser not found", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DetailRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null, 
-    painter: Painter? = null, 
-    label: String, 
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    painter: Painter? = null,
+    label: String,
     value: String,
     onClick: (() -> Unit)? = null,
     iconSize: Dp = 24.dp
 ) {
     Row(
-        verticalAlignment = Alignment.CenterVertically, 
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).run { if (onClick != null) clickable(onClick = onClick) else this }
     ) {
         if (icon != null) {

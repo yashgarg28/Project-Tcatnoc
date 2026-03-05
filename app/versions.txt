@@ -32,3 +32,10 @@
                Added filters for the tags
                Added warning notifications.
                Added new file TimerActionReceiver.kt
+
+6.1.1 and 22 - Updated the database version to 4
+               Added a save forever button
+               Added contacts permission on the startup
+               Added more fields - email, address and website
+               Fixed a bug where time remaining was not visible for light theme
+               Added a new file - ContactExporter.kt

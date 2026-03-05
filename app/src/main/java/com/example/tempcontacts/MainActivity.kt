@@ -78,8 +78,10 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: ContactViewModel by viewModels()
     private lateinit var settingsDataStore: SettingsDataStore
+
+    // ✅ FIXED - Use RequestMultiplePermissions for multiple permissions
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -154,6 +156,7 @@ class MainActivity : ComponentActivity() {
                                     ContactDetailScreen(
                                         viewModel = viewModel,
                                         contactId = contactId,
+                                        isDarkTheme = useDarkTheme,  // ✅ ADD THIS LINE
                                         onBackClick = { navController.popBackStack() },
                                         onEditClick = { navController.navigate("editContact/$contactId") }
                                     )
@@ -218,9 +221,32 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun askForPermissions() {
+        // Request Notification Permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
+        }
+
+        // ✅ Request Contact Permissions (Android 6+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val needsReadContacts = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_CONTACTS
+            ) != PackageManager.PERMISSION_GRANTED
+
+            val needsWriteContacts = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_CONTACTS
+            ) != PackageManager.PERMISSION_GRANTED
+
+            if (needsReadContacts || needsWriteContacts) {
+                requestPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.WRITE_CONTACTS
+                    )
+                )
             }
         }
     }

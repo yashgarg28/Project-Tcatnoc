@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContactPhone
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +31,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -88,6 +93,13 @@ fun EditContactScreen(
     var phone by remember { mutableStateOf("") }
     var country by remember { mutableStateOf(countryList.find { it.name == "India" } ?: countryList[0]) }
     var notes by remember { mutableStateOf(contact?.notes ?: "") }
+
+    // ✅ NEW - Additional Fields
+    var email by remember { mutableStateOf(contact?.email ?: "") }
+    var address by remember { mutableStateOf(contact?.address ?: "") }
+    var website by remember { mutableStateOf(contact?.website ?: "") }
+    var showAdditionalFields by remember { mutableStateOf(false) }
+
     val lastCountryCode by settingsDataStore
         .lastCountryCodeFlow
         .collectAsState(initial = null)
@@ -235,7 +247,9 @@ fun EditContactScreen(
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = countryCodeExpanded) },
-                        modifier = Modifier.menuAnchor()
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
                     )
                     ExposedDropdownMenu(
                         expanded = countryCodeExpanded,
@@ -272,7 +286,7 @@ fun EditContactScreen(
                     modifier = Modifier.weight(0.6f)
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(                      // Notes
                 value = notes,
@@ -286,9 +300,109 @@ fun EditContactScreen(
                 singleLine = false
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Text(                                   // Tags
+            // ✅ NEW - "Add More Fields" Button (collapsed by default)
+            Button(
+                onClick = { showAdditionalFields = !showAdditionalFields },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Text(
+                    text = if (showAdditionalFields) "Hide Additional Fields" else "Add More Fields",
+                    fontSize = 14.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ✅ NEW - Additional Fields (shown only when showAdditionalFields is true)
+            if (showAdditionalFields) {
+                // EMAIL FIELD
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it.trim() },
+                    label = { Text("Email (Optional)") },
+                    placeholder = { Text("example@email.com") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = "Email"
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = email.isNotBlank() && !isValidEmail(email)
+                )
+
+                if (email.isNotBlank() && !isValidEmail(email)) {
+                    Text(
+                        text = "Please enter a valid email",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ADDRESS FIELD
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("Address (Optional)") },
+                    placeholder = { Text("Street, City, Country") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.LocationOn,
+                            contentDescription = "Address"
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // WEBSITE FIELD
+                OutlinedTextField(
+                    value = website,
+                    onValueChange = { website = it.trim() },
+                    label = { Text("Website (Optional)") },
+                    placeholder = { Text("example.com") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Language,
+                            contentDescription = "Website"
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tags
+            Text(
                 text = "Category",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 16.dp)
@@ -322,7 +436,7 @@ fun EditContactScreen(
                 }
             }
 
-                // 3. ✅ MISSING: The Input Dialog
+            // 3. ✅ MISSING: The Input Dialog
             if (showCustomTagDialog) {
                 AlertDialog(
                     onDismissRequest = { showCustomTagDialog = false },
@@ -350,7 +464,7 @@ fun EditContactScreen(
                     }
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text("Auto-Delete Duration", style = MaterialTheme.typography.titleMedium)  // Auto delete
             Spacer(modifier = Modifier.height(8.dp))
@@ -407,16 +521,22 @@ fun EditContactScreen(
                         val fullPhoneNumber = "${country.code} $phone"
                         val deletionTimestamp = selectedDurationMillis?.let { System.currentTimeMillis() + it }
 
-                        // ✅ Include 'notes' in both the copy (update) and the constructor (new)
+                        // ✅ Include email, address, website in both the copy (update) and the constructor (new)
                         val updatedContact = contact?.copy(
                             name = name,
                             phone = fullPhoneNumber,
+                            email = email.trim(),
+                            address = address.trim(),
+                            website = website.trim(),
                             notes = notes,
                             tag = selectedTag,
                             deletionTimestamp = deletionTimestamp
                         ) ?: Contact(
                             name = name,
                             phone = fullPhoneNumber,
+                            email = email.trim(),
+                            address = address.trim(),
+                            website = website.trim(),
                             notes = notes,
                             tag = selectedTag,
                             deletionTimestamp = deletionTimestamp
@@ -627,4 +747,9 @@ fun CustomDurationPicker(onSet: (days: Int, hours: Int, minutes: Int) -> Unit, o
         }
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
+}
+
+//Email Validation Function
+private fun isValidEmail(email: String): Boolean {
+    return email.matches(Regex("^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$"))
 }
