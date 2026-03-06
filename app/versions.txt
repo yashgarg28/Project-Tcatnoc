@@ -39,3 +39,5 @@
                Added more fields - email, address and website
                Fixed a bug where time remaining was not visible for light theme
                Added a new file - ContactExporter.kt
+
+               Added a new ContextMenuCard.kt file

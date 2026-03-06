@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.style.TextOverflow
 import kotlin.collections.firstOrNull
 import kotlinx.coroutines.launch
@@ -72,6 +73,21 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.blur
+
 const val ABOUT_ROUTE = "about_page"
 
 class MainActivity : ComponentActivity() {
@@ -79,7 +95,6 @@ class MainActivity : ComponentActivity() {
     private val viewModel: ContactViewModel by viewModels()
     private lateinit var settingsDataStore: SettingsDataStore
 
-    // ✅ FIXED - Use RequestMultiplePermissions for multiple permissions
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> }
@@ -139,7 +154,7 @@ class MainActivity : ComponentActivity() {
                                     ContactListScreen(
                                         viewModel = viewModel,
                                         isDarkTheme = useDarkTheme,
-                                        settingsDataStore = settingsDataStore, // ✅ PASS IT
+                                        settingsDataStore = settingsDataStore,
                                         onContactClick = { contactId ->
                                             if (contactId == 0) navController.navigate("editContact/0")
                                             else navController.navigate("contactDetail/$contactId")
@@ -156,7 +171,7 @@ class MainActivity : ComponentActivity() {
                                     ContactDetailScreen(
                                         viewModel = viewModel,
                                         contactId = contactId,
-                                        isDarkTheme = useDarkTheme,  // ✅ ADD THIS LINE
+                                        isDarkTheme = useDarkTheme,
                                         onBackClick = { navController.popBackStack() },
                                         onEditClick = { navController.navigate("editContact/$contactId") }
                                     )
@@ -221,14 +236,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun askForPermissions() {
-        // Request Notification Permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
             }
         }
 
-        // ✅ Request Contact Permissions (Android 6+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val needsReadContacts = ContextCompat.checkSelfPermission(
                 this,
@@ -273,14 +286,17 @@ fun ContactListScreen(
     onContactClick: (Int) -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    // --- 1. States ---
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var showWhatsAppDialog by remember { mutableStateOf(false) }
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var selectedContactId by remember { mutableStateOf<Int?>(null) }
+    var showContextMenu by remember { mutableStateOf(false) }
+    var contactToDelete by remember { mutableStateOf<Contact?>(null) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var menuPosition by remember { mutableStateOf(Offset.Zero) }
 
-    // Tag Logic
     var selectedFilterTag by remember { mutableStateOf("All") }
     val databaseTags by viewModel.allExistingTags.collectAsState()
     val filterOptions = remember(databaseTags) {
@@ -289,7 +305,6 @@ fun ContactListScreen(
 
     val focusRequester = remember { FocusRequester() }
 
-    // --- 2. Live Timer Logic ---
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
@@ -297,7 +312,6 @@ fun ContactListScreen(
         }
     }
 
-    // --- 3. Filtering Logic (Handles Search + Tag) ---
     val filteredContacts = groupedContacts.mapValues { (_, contacts) ->
         contacts.filter { contact ->
             val matchesSearch = searchQuery.isEmpty() ||
@@ -311,135 +325,138 @@ fun ContactListScreen(
         }
     }.filterValues { it.isNotEmpty() }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (isSearching) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search...") },
-                            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .blur(radius = if (showContextMenu) 25.dp else 0.dp)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        if (isSearching) {
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Search...") },
+                                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                                singleLine = true,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent
+                                )
                             )
-                        )
-                    } else { Text("Contacts") }
-                },
-                actions = {
-                    if (isSearching) {
-                        IconButton(onClick = { isSearching = false; searchQuery = "" }) {
-                            Icon(Icons.Default.Close, null)
-                        }
-                    } else {
-                        if (groupedContacts.isNotEmpty()) {
-                            IconButton(onClick = { isSearching = true }) {
-                                Icon(Icons.Default.Search, null)
+                        } else { Text("Contacts") }
+                    },
+                    actions = {
+                        if (isSearching) {
+                            IconButton(onClick = { isSearching = false; searchQuery = "" }) {
+                                Icon(Icons.Default.Close, null)
+                            }
+                        } else {
+                            if (groupedContacts.isNotEmpty()) {
+                                IconButton(onClick = { isSearching = true }) {
+                                    Icon(Icons.Default.Search, null)
+                                }
+                            }
+                            IconButton(onClick = onSettingsClick) {
+                                Icon(Icons.Default.Settings, null)
                             }
                         }
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, null)
-                        }
                     }
-                }
-            )
-        },
-        floatingActionButton = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
-                FloatingActionButton(onClick = { showWhatsAppDialog = true }) {
-                    Icon(painterResource(R.drawable.ic_whatsapp), "WhatsApp", tint = Color.Unspecified)
-                }
-                FloatingActionButton(onClick = { onContactClick(0) }) {
-                    Icon(Icons.Default.Add, null)
-                }
-            }
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-
-            // ✅ THE FILTER BAR
-            if (groupedContacts.isNotEmpty()) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filterOptions) { tag ->
-                        val isSelected = selectedFilterTag == tag
-
-                        // Call helper inside the loop to fix 'Unresolved reference' errors
-                        val tagAttrs = if (tag != "All") getTagAttributes(tag) else null
-
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedFilterTag = tag },
-                            label = { Text(tag) },
-                            leadingIcon = if (tagAttrs != null) {
-                                {
-                                    Icon(
-                                        imageVector = tagAttrs.third, // The icon
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else tagAttrs.second
-                                    )
-                                }
-                            } else null,
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                )
+            },
+            floatingActionButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
+                    FloatingActionButton(onClick = { showWhatsAppDialog = true }) {
+                        Icon(painterResource(R.drawable.ic_whatsapp), "WhatsApp", tint = Color.Unspecified)
+                    }
+                    FloatingActionButton(onClick = { onContactClick(0) }) {
+                        Icon(Icons.Default.Add, null)
                     }
                 }
             }
+        ) { padding ->
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
-            // --- Contact List Content ---
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                if (filteredContacts.isEmpty()) {
-                    // Logic to show "No Results" or "Empty Branding"
-                    if (searchQuery.isNotEmpty() || selectedFilterTag != "All") {
-                        // Dead center of the remaining screen
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\""
-                                else "No contacts tagged as '$selectedFilterTag'",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(32.dp)
+                if (groupedContacts.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filterOptions) { tag ->
+                            val isSelected = selectedFilterTag == tag
+                            val tagAttrs = if (tag != "All") getTagAttributes(tag) else null
+
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedFilterTag = tag },
+                                label = { Text(tag) },
+                                leadingIcon = if (tagAttrs != null) {
+                                    {
+                                        Icon(
+                                            imageVector = tagAttrs.third,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else tagAttrs.second
+                                        )
+                                    }
+                                } else null,
+                                shape = RoundedCornerShape(12.dp)
                             )
                         }
-                    } else {
-                        // Shows your logo branding when the whole app is empty
-                        EmptyListBranding(isDarkTheme)
                     }
-                } else {
-                    // Your existing LazyColumn logic
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        filteredContacts.forEach { (letter, contacts) ->
-                            stickyHeader {
+                }
+
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    if (filteredContacts.isEmpty()) {
+                        if (searchQuery.isNotEmpty() || selectedFilterTag != "All") {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Text(
-                                    letter.toString(),
-                                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp, 8.dp),
-                                    fontWeight = FontWeight.Bold
+                                    text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\""
+                                    else "No contacts tagged as '$selectedFilterTag'",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(32.dp)
                                 )
                             }
-                            item {
-                                Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
-                                    Column {
-                                        contacts.forEachIndexed { i, c ->
-                                            ContactCard(
-                                                contact = c,
-                                                isDarkTheme = isDarkTheme,
-                                                currentTime = currentTime,
-                                                searchQuery = searchQuery,
-                                                onClick = { onContactClick(c.id) }
-                                            )
-                                            if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                        } else {
+                            EmptyListBranding(isDarkTheme)
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            filteredContacts.forEach { (letter, contacts) ->
+                                stickyHeader {
+                                    Text(
+                                        letter.toString(),
+                                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp, 8.dp),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                item {
+                                    Card(Modifier.padding(16.dp, 8.dp), shape = RoundedCornerShape(12.dp)) {
+                                        Column {
+                                            contacts.forEachIndexed { i, c ->
+                                                ContactCard(
+                                                    contact = c,
+                                                    isDarkTheme = isDarkTheme,
+                                                    currentTime = currentTime,
+                                                    searchQuery = searchQuery,
+                                                    onClick = { onContactClick(c.id) },
+                                                    onLongPress = { contactId, offset ->
+                                                        selectedContactId = contactId
+                                                        menuPosition = offset
+                                                        showContextMenu = true
+                                                    }
+                                                )
+                                                if (i < contacts.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                                            }
                                         }
                                     }
                                 }
@@ -450,6 +467,176 @@ fun ContactListScreen(
             }
         }
     }
+
+    // ✅ CONTEXT MENU OVERLAY
+    if (showContextMenu && selectedContactId != null) {
+        val allContacts by viewModel.allContacts.collectAsState()
+        val selectedContact = allContacts.find { it.id == selectedContactId }
+        val contextForMenu = LocalContext.current
+
+        if (selectedContact != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { showContextMenu = false }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(300.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = selectedContact.name.firstOrNull()?.toString() ?: "?",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = selectedContact.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = selectedContact.phone,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                if (selectedContact.tag != "None") {
+                                    val (bgColor, contentColor, icon) = getTagAttributes(selectedContact.tag)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Surface(
+                                        color = bgColor,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.height(22.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = contentColor,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = selectedContact.tag,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = contentColor,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (selectedContact.deletionTimestamp != null) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_timer),
+                                    contentDescription = "Expiration Timer",
+                                    tint = getTimerColor(selectedContact.deletionTimestamp, currentTime, isDarkTheme)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ContactContextMenu(
+                        contact = selectedContact,
+                        position = Offset.Zero,
+                        onDismiss = { showContextMenu = false },
+                        onEdit = {
+                            showContextMenu = false
+                            onContactClick(selectedContact.id)
+                        },
+                        onCall = {
+                            showContextMenu = false
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${selectedContact.phone}"))
+                            contextForMenu.startActivity(intent)
+                        },
+                        onMessage = {
+                            showContextMenu = false
+                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${selectedContact.phone}"))
+                            contextForMenu.startActivity(intent)
+                        },
+                        onDelete = {
+                            showContextMenu = false
+                            showDeleteConfirmation = true
+                            contactToDelete = selectedContact
+                        },
+                        onExtendTimer = {
+                            showContextMenu = false
+                            onContactClick(selectedContact.id)
+                        },
+                        onSaveForever = {
+                            showContextMenu = false
+                            ContactExporter.exportToPhoneBook(contextForMenu, selectedContact)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // ✅ DELETE CONFIRMATION DIALOG
+    if (showDeleteConfirmation && contactToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete Contact?") },
+            text = { Text("Are you sure you want to delete \"${contactToDelete!!.name}\"?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.delete(contactToDelete!!)
+                        showDeleteConfirmation = false
+                        contactToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showWhatsAppDialog) WhatsAppDialog(settingsDataStore) { showWhatsAppDialog = false }
 }
 
@@ -457,7 +644,6 @@ fun ContactListScreen(
 fun EmptyListBranding(isDarkTheme: Boolean) {
     var isAnimated by remember { mutableStateOf(false) }
 
-    // Logic: Black text for Light Mode, White text for Dark Mode
     val brandColor = if (isDarkTheme) Color.White else Color.Black
 
     LaunchedEffect(Unit) { isAnimated = true }
@@ -497,7 +683,7 @@ fun EmptyListBranding(isDarkTheme: Boolean) {
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(bottom = 90.dp, end = 90.dp)) { // Increased end padding to clear FABs
+    Box(modifier = Modifier.fillMaxSize().padding(bottom = 90.dp, end = 90.dp)) {
         Row(
             Modifier.align(Alignment.BottomEnd).graphicsLayer(alpha = alpha),
             verticalAlignment = Alignment.CenterVertically
@@ -520,7 +706,7 @@ fun EmptyListBranding(isDarkTheme: Boolean) {
             Icon(
                 Icons.Default.ArrowForward,
                 null,
-                modifier = Modifier.size(32.dp), // Removed the 45f rotation so it points right
+                modifier = Modifier.size(32.dp),
                 tint = brandColor
             )
         }
@@ -533,20 +719,13 @@ fun getTimerColor(deletionTimestamp: Long?, currentTime: Long, isDarkTheme: Bool
 
     val remainingMillis = deletionTimestamp - currentTime
 
-    // NEW SCALING:
-    val oneDay = 24 * 60 * 60 * 1000L      // 24 Hours
-    val fiveDays = 5 * oneDay              // 5 Days
+    val oneDay = 24 * 60 * 60 * 1000L
+    val fiveDays = 5 * oneDay
 
     return when {
         remainingMillis <= 0 -> Color.Gray
-
-        // 🔴 Red if less than 24 hours left
         remainingMillis < oneDay -> Color(0xFFFF5252)
-
-        // 🟠 Orange if less than 5 days left
         remainingMillis < fiveDays -> Color(0xFFFFB74D)
-
-        // 🔵/⚪ Brand color if more than 5 days left
         else -> if (isDarkTheme) Color.White else Color(0xFF2196F3)
     }
 }
@@ -557,16 +736,23 @@ fun ContactCard(
     isDarkTheme: Boolean,
     currentTime: Long,
     searchQuery: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongPress: ((Int, Offset) -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        onLongPress?.invoke(contact.id, offset)
+                    },
+                    onTap = { onClick() }
+                )
+            }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // --- 1. Circle Avatar ---
         Box(
             modifier = Modifier
                 .size(48.dp)
@@ -583,29 +769,25 @@ fun ContactCard(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // --- 2. Contact Details ---
         Column(modifier = Modifier.weight(1f)) {
-            // Name stays at the top
             Text(
                 text = contact.name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold
             )
 
-            // Phone number follows
             Text(
                 text = contact.phone,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // ✅ Tag Badge moved here (Below Phone Number)
             if (contact.tag != "None") {
                 val (bgColor, contentColor, icon) = getTagAttributes(contact.tag)
-                Spacer(modifier = Modifier.height(6.dp)) // Vertical gap
+                Spacer(modifier = Modifier.height(6.dp))
                 Surface(
                     color = bgColor,
-                    shape = RoundedCornerShape(12.dp), // Slightly more subtle curve
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(22.dp)
                 ) {
                     Row(
@@ -630,7 +812,6 @@ fun ContactCard(
                 }
             }
 
-            // --- Match logic: Search query in Notes ---
             val isMatchInNote = searchQuery.isNotBlank() &&
                     contact.notes.contains(searchQuery, ignoreCase = true)
 
@@ -652,7 +833,6 @@ fun ContactCard(
             }
         }
 
-        // --- 3. Dynamic Timer Icon ---
         if (contact.deletionTimestamp != null) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_timer),
@@ -675,19 +855,16 @@ fun WhatsAppDialog(
     var countryCodeExpanded by remember { mutableStateOf(false) }
     var phone by remember { mutableStateOf("") }
 
-    // 🌍 Load saved country
     val savedCountryCode by settingsDataStore
         .lastCountryCodeFlow
         .collectAsState(initial = null)
 
-    // 🌍 Selected country (default India)
     var country by remember {
         mutableStateOf(
             countryList.find { it.code == "+91" } ?: countryList.first()
         )
     }
 
-    // 🔁 Restore last used country
     LaunchedEffect(savedCountryCode) {
         savedCountryCode?.let { code ->
             countryList.find { it.code == code }?.let {
@@ -708,7 +885,6 @@ fun WhatsAppDialog(
 
                 Spacer(Modifier.height(8.dp))
 
-                // 🌍 Country Picker
                 ExposedDropdownMenuBox(
                     expanded = countryCodeExpanded,
                     onExpandedChange = { countryCodeExpanded = !countryCodeExpanded }
@@ -752,7 +928,6 @@ fun WhatsAppDialog(
 
                 Spacer(Modifier.height(8.dp))
 
-                // 📞 Phone input
                 OutlinedTextField(
                     value = phone,
                     onValueChange = {
