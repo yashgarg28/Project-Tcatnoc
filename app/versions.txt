@@ -40,4 +40,5 @@
                Fixed a bug where time remaining was not visible for light theme
                Added a new file - ContactExporter.kt
 
-               Added a new ContextMenuCard.kt file
+6.2.1 and 23 - Added a new ContextMenuCard.kt file
+               Add a new context menu when long pressed on a contact

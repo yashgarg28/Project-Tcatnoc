@@ -58,7 +58,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -77,14 +76,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.blur
 
@@ -155,6 +152,9 @@ class MainActivity : ComponentActivity() {
                                         viewModel = viewModel,
                                         isDarkTheme = useDarkTheme,
                                         settingsDataStore = settingsDataStore,
+                                        onEditClick = { contactId ->
+                                            navController.navigate("editContact/$contactId")
+                                        },
                                         onContactClick = { contactId ->
                                             if (contactId == 0) navController.navigate("editContact/0")
                                             else navController.navigate("contactDetail/$contactId")
@@ -283,6 +283,7 @@ fun ContactListScreen(
     viewModel: ContactViewModel,
     isDarkTheme: Boolean,
     settingsDataStore: SettingsDataStore,
+    onEditClick: (Int) -> Unit,
     onContactClick: (Int) -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -475,6 +476,21 @@ fun ContactListScreen(
         val contextForMenu = LocalContext.current
 
         if (selectedContact != null) {
+            // Calculate remaining time
+            val remainingMillis = if (selectedContact.deletionTimestamp != null) {
+                selectedContact.deletionTimestamp!! - currentTime
+            } else {
+                0L
+            }
+
+            val remainingDays = (remainingMillis / (1000 * 60 * 60 * 24)).toInt()
+            val remainingHours = ((remainingMillis % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)).toInt()
+            val timeRemaining = if (remainingDays > 0) {
+                "$remainingDays days, $remainingHours hours"
+            } else {
+                "$remainingHours hours"
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -487,6 +503,19 @@ fun ContactListScreen(
                         .width(300.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // ✅ TIME REMAINING - Displayed above card
+                    if (selectedContact.deletionTimestamp != null && remainingMillis > 0) {
+                        Text(
+                            text = "Time remaining: $timeRemaining",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .align(Alignment.Start)
+                                .padding(bottom = 8.dp)
+                        )
+                    }
+
+                    // Selected contact card
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -574,13 +603,14 @@ fun ContactListScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // ✅ CONTEXT MENU
                     ContactContextMenu(
                         contact = selectedContact,
                         position = Offset.Zero,
                         onDismiss = { showContextMenu = false },
                         onEdit = {
                             showContextMenu = false
-                            onContactClick(selectedContact.id)
+                            onEditClick(selectedContact.id)
                         },
                         onCall = {
                             showContextMenu = false
@@ -597,9 +627,17 @@ fun ContactListScreen(
                             showDeleteConfirmation = true
                             contactToDelete = selectedContact
                         },
-                        onExtendTimer = {
+                        onExtendTimer = { days: Int ->
                             showContextMenu = false
-                            onContactClick(selectedContact.id)
+                            // Get the fresh contact data to ensure we have the latest timer
+                            val freshContact = allContacts.find { it.id == selectedContact.id }
+                            if (freshContact != null) {
+                                // Add days to the EXISTING deletion timestamp
+                                val currentDeletionTime = freshContact.deletionTimestamp ?: System.currentTimeMillis()
+                                val newDeletionTime = currentDeletionTime + (days * 24 * 60 * 60 * 1000L)
+                                val updatedContact = freshContact.copy(deletionTimestamp = newDeletionTime)
+                                viewModel.update(updatedContact)
+                            }
                         },
                         onSaveForever = {
                             showContextMenu = false

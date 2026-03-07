@@ -7,6 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -24,9 +28,11 @@ fun ContactContextMenu(
     onCall: () -> Unit,
     onMessage: () -> Unit,
     onDelete: () -> Unit,
-    onExtendTimer: () -> Unit,
+    onExtendTimer: (Int) -> Unit,
     onSaveForever: () -> Unit,
 ) {
+    var showExtendOptions by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -63,12 +69,69 @@ fun ContactContextMenu(
                 onClick = onMessage
             )
 
-            // Extend Timer
+            // Extend Timer with submenu
             ContextMenuItem(
-                icon = Icons.Default.AccessTime,
+                icon = if (showExtendOptions) Icons.Default.ExpandLess else Icons.Default.AccessTime,
                 label = "Extend Timer",
-                onClick = onExtendTimer
+                onClick = { showExtendOptions = !showExtendOptions }
             )
+
+            // Submenu options for extending timer
+            if (showExtendOptions) {
+                // 24 Hours option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onExtendTimer(1)
+                        }
+                        .padding(vertical = 10.dp, horizontal = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "24 Hours",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "24 Hours",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // 7 Days option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onExtendTimer(7)
+                        }
+                        .padding(vertical = 10.dp, horizontal = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "7 Days",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "7 Days",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
 
             // Save Forever
             ContextMenuItem(
@@ -99,23 +162,14 @@ private fun ContextMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp)
+            .padding(vertical = 12.dp, horizontal = 16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(22.dp),
-                tint = if (isDestructive) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
+            // Text on the left
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
@@ -124,14 +178,21 @@ private fun ContextMenuItem(
                 color = if (isDestructive) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurface
             )
+
+            // Icon on the right
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(22.dp),
+                tint = if (isDestructive) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary
+            )
         }
 
-        // Divider between items (except after Delete)
+        // Divider between items (except after Delete which is last)
         if (label != "Delete") {
             HorizontalDivider(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 12.dp),
+                modifier = Modifier.padding(top = 12.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
                 thickness = 0.5.dp
             )
