@@ -911,7 +911,18 @@ fun WhatsAppDialog(
         }
     }
 
-    val isPhoneNumberValid = phone.length == country.phoneLength
+    val countryCodeDigits = country.code.replace("+", "")
+
+    val normalizedPhone = when {
+        // If number is longer than expected, assume it includes country code
+        phone.length > country.phoneLength &&
+                phone.startsWith(countryCodeDigits) ->
+            phone.removePrefix(countryCodeDigits)
+
+        else -> phone
+    }
+
+    val isPhoneNumberValid = normalizedPhone.length == country.phoneLength
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -969,9 +980,7 @@ fun WhatsAppDialog(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = {
-                        phone = it
-                            .filter(Char::isDigit)
-                            .take(country.phoneLength)
+                        phone = it.filter(Char::isDigit)
                     },
                     label = { Text("Phone") },
                     isError = phone.isNotEmpty() && !isPhoneNumberValid,
@@ -992,8 +1001,18 @@ fun WhatsAppDialog(
             Button(
                 enabled = isPhoneNumberValid,
                 onClick = {
-                    val fullNumber =
-                        "${country.code.replace("+", "")}$phone"
+                    val countryCodeDigits = country.code.replace("+", "")
+
+                    val normalizedPhone = when {
+                        phone.length > country.phoneLength &&
+                                phone.startsWith(countryCodeDigits) ->
+                            phone.removePrefix(countryCodeDigits)
+
+                        else -> phone
+                    }
+
+                    val fullNumber = "$countryCodeDigits$normalizedPhone"
+
 
                     val intent = Intent(
                         Intent.ACTION_VIEW,

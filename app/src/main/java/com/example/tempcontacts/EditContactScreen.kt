@@ -173,12 +173,17 @@ fun EditContactScreen(
     LaunchedEffect(contact) {
         contact?.let {
             name = it.name
-            val parts = it.phone.split(" ")
-            if (parts.size == 2) {
-                country = countryList.find { c -> c.code == parts[0] } ?: countryList[0]
-                phone = parts[1]
+            val fullNumber = it.phone.replace(" ", "")
+
+            val matchedCountry = countryList.firstOrNull { c ->
+                fullNumber.startsWith(c.code.replace("+", ""))
+            }
+
+            if (matchedCountry != null) {
+                country = matchedCountry
+                phone = fullNumber.removePrefix(matchedCountry.code.replace("+", ""))
             } else {
-                phone = it.phone
+                phone = fullNumber
             }
         }
     }
@@ -194,7 +199,9 @@ fun EditContactScreen(
 
 
     LaunchedEffect(phone, country) {
-        isPhoneNumberValid = phone.length == country.phoneLength
+        isPhoneNumberValid =
+            phone.length == country.phoneLength &&
+                    phone.all { it.isDigit() }
     }
 
     // Function to handle the success feedback (Vibration + Toast)
@@ -275,9 +282,22 @@ fun EditContactScreen(
                 OutlinedTextField(                          // Phone Number
                     value = phone,
                     onValueChange = { newValue ->
-                        phone = newValue
-                            .filter { it.isDigit() }
-                            .take(country.phoneLength)
+
+                        val digitsOnly = newValue.filter { it.isDigit() }
+
+                        val countryCodeDigits = country.code.replace("+", "")
+
+                        val normalized = when {
+                            digitsOnly.startsWith(countryCodeDigits) ->
+                                digitsOnly.removePrefix(countryCodeDigits)
+
+                            digitsOnly.startsWith("0") && countryCodeDigits != "91" ->
+                                digitsOnly.removePrefix("0")
+
+                            else -> digitsOnly
+                        }
+
+                        phone = normalized.take(country.phoneLength)
                     },
                     label = { Text("Phone") },
                     isError = !isPhoneNumberValid,
@@ -518,7 +538,7 @@ fun EditContactScreen(
             Button(
                 onClick = {
                     if (name.isNotBlank() && isPhoneNumberValid) {
-                        val fullPhoneNumber = "${country.code} $phone"
+                        val fullPhoneNumber = "${country.code} ${phone.trim()}"
                         val deletionTimestamp = selectedDurationMillis?.let { System.currentTimeMillis() + it }
 
                         // ✅ Include email, address, website in both the copy (update) and the constructor (new)
