@@ -42,3 +42,6 @@
 
 6.2.1 and 23 - Added a new ContextMenuCard.kt file
                Add a new context menu when long pressed on a contact
+
+6.2.2 and 24 - Fixed a bug where pasting a contact with 91 used to strip the last 2 digits
+               for both add contact and whatsapp dialogue.
